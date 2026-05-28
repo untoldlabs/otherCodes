@@ -1,0 +1,68 @@
+# ── Large data files ──────────────────────────────────────────────────────────
+# Raw photos (iPhone originals — large, personal, not for version control)
+data/raw/
+data/originals/
+data/excluded/
+
+# Private per-image metadata — contains GPS coordinates, never commit
+data/metadata/
+
+# Per-image RF brush annotations (user work — gitignored as data, not code)
+data/annotations/
+
+# Tight crop outputs — photo crop + overlay preview per tag
+data/crops/
+
+# Derived outputs (generated from raw data — can be reproduced)
+data/segmented/
+data/rasters/
+data/vectors/
+data/plots/
+data/orphaned/
+data/rf_importances.csv
+data/features.csv
+data/colour.csv
+
+# ML model weights (downloaded separately via setup_env.sh)
+models/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments (we use conda — env lives in ~/miniconda3/envs/othercodes)
+venv/
+.venv/
+env/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Secrets / local config ────────────────────────────────────────────────────
+.env
+*.key
+outputs/

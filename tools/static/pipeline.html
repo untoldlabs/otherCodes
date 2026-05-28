@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>other.codes — Pipeline</title>
+<style>
+  /* ── Reset & base ──────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0e0e10;
+    --surface:  #17171a;
+    --border:   #2a2a30;
+    --accent:   #6c63ff;
+    --accent2:  #ff6584;
+    --text:     #e8e8ec;
+    --muted:    #6b6b78;
+    --ok:       #4ade80;
+    --err:      #f87171;
+    --warn:     #facc15;
+    --radius:   8px;
+    --mono:     "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top bar ───────────────────────────────────────────────────────────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .topbar .logo {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .topbar .logo span { color: var(--accent); }
+  .topbar .sep { color: var(--border); margin: 0 2px; }
+  .topbar .page-title { color: var(--muted); font-size: 13px; }
+  .topbar .project-badge {
+    margin-left: auto;
+    background: var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .topbar .project-badge strong { color: var(--text); }
+  .topbar .back-btn {
+    margin-left: 8px;
+    padding: 5px 12px;
+    background: var(--border);
+    border: none;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .topbar .back-btn:hover { background: #333340; color: var(--text); }
+
+  /* ── Main layout ───────────────────────────────────────────────────────── */
+  .main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    height: calc(100vh - 53px);
+  }
+
+  /* ── Left panel (controls) ─────────────────────────────────────────────── */
+  .controls {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Form rows ─────────────────────────────────────────────────────────── */
+  .row { display: flex; flex-direction: column; gap: 5px; }
+  .row label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .row input[type="number"],
+  .row input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+  }
+  .row input:focus { border-color: var(--accent); }
+
+  /* ── Colour pickers ────────────────────────────────────────────────────── */
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .color-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .color-cell label { font-size: 10px; color: var(--muted); }
+  .color-cell input[type="color"] {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+    outline: none;
+  }
+  .color-cell input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .color-cell input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+  /* ── Status bar ────────────────────────────────────────────────────────── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .status-bar .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .status-bar.ok .dot { background: var(--ok); }
+  .status-bar.err .dot { background: var(--err); }
+  .status-bar.running .dot {
+    background: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  /* ── Run buttons ───────────────────────────────────────────────────────── */
+  .run-btn {
+    width: 100%;
+    padding: 11px 0;
+    border-radius: 8px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .run-btn:active { transform: scale(0.98); }
+  .run-btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-analyze { background: var(--accent); color: #fff; }
+  .btn-cluster { background: var(--accent2); color: #fff; }
+  .btn-analyze:hover:not(:disabled) { opacity: 0.88; }
+  .btn-cluster:hover:not(:disabled) { opacity: 0.88; }
+
+  /* spinner */
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .running .spinner { display: block; }
+
+  /* ── Right panel (log) ─────────────────────────────────────────────────── */
+  .log-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .log-header .clear-btn {
+    background: var(--border);
+    border: none;
+    border-radius: 5px;
+    color: var(--muted);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .log-header .clear-btn:hover { background: #333340; color: var(--text); }
+  .log-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: var(--bg);
+  }
+  .log-line { display: block; }
+  .log-line.ok    { color: var(--ok); }
+  .log-line.err   { color: var(--err); }
+  .log-line.warn  { color: var(--warn); }
+  .log-line.dim   { color: var(--muted); }
+  .log-line.head  { color: var(--accent); font-weight: 600; }
+
+  /* ── Divider ───────────────────────────────────────────────────────────── */
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* ── Animations ────────────────────────────────────────────────────────── */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
+
+  /* ── Hint text ─────────────────────────────────────────────────────────── */
+  .hint {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <a class="logo" href="/"><span>other</span>.codes</a>
+  <span class="sep">/</span>
+  <span class="page-title">Pipeline</span>
+  <div class="project-badge" id="project-badge">Loading…</div>
+  <a class="back-btn" href="/">← Back to Annotator</a>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Left: controls -->
+  <div class="controls">
+
+    <!-- Project status -->
+    <div class="section">
+      <div class="section-header">📁 Project</div>
+      <div class="section-body">
+        <div class="status-bar" id="proj-status">
+          <div class="dot"></div>
+          <span id="proj-status-text">Loading…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Feature extraction -->
+    <div class="section">
+      <div class="section-header">① Feature Extraction</div>
+      <div class="section-body">
+        <p class="hint">Vectorises each tag with vtracer, computes shape + stroke metrics, writes <strong>data/features.csv</strong>.</p>
+        <button class="run-btn btn-analyze" id="btn-analyze" onclick="runScript('analyze')">
+          <div class="spinner" id="spin-analyze"></div>
+          <span id="lbl-analyze">▶ Run Feature Extraction</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Clustering -->
+    <div class="section">
+      <div class="section-header">② Clustering &amp; PCA</div>
+      <div class="section-body">
+
+        <!-- k -->
+        <div class="row">
+          <label>Number of families (k)</label>
+          <input type="number" id="inp-k" value="5" min="2" max="20" step="1"
+                 oninput="onKChange()">
+        </div>
+
+        <!-- color pickers -->
+        <div class="row">
+          <label>Family colours</label>
+          <div class="color-grid" id="color-grid"></div>
+        </div>
+
+        <!-- reps -->
+        <div class="row">
+          <label>Examples per family (reps)</label>
+          <input type="number" id="inp-reps" value="3" min="1" max="10" step="1">
+        </div>
+
+        <!-- grid -->
+        <div class="row">
+          <label>Sparse PCA grid columns <span class="hint">(blank = auto)</span></label>
+          <input type="number" id="inp-grid" value="" min="2" max="30" step="1" placeholder="auto">
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="run-btn btn-cluster" id="btn-cluster" onclick="runScript('cluster')">
+          <div class="spinner" id="spin-cluster"></div>
+          <span id="lbl-cluster">▶ Run Clustering</span>
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /controls -->
+
+  <!-- Right: log -->
+  <div class="log-panel">
+    <div class="log-header">
+      <span>Output log</span>
+      <button class="clear-btn" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-output" id="log"></div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── Default colour palette ───────────────────────────────────────────────────
+const DEFAULT_COLORS = [
+  "#6c63ff", "#ff6584", "#43d9ad", "#facc15", "#f97316",
+  "#06b6d4", "#a855f7", "#ec4899", "#84cc16", "#f43f5e",
+];
+
+let currentK = 5;
+let running  = false;
+let es       = null;  // EventSource
+
+// ── Startup ──────────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", async () => {
+  buildColorGrid(currentK);
+  await loadProjectInfo();
+});
+
+// ── Project info ─────────────────────────────────────────────────────────────
+async function loadProjectInfo() {
+  try {
+    const res  = await fetch("/api/pipeline/project");
+    const data = await res.json();
+    const badge = document.getElementById("project-badge");
+    const st    = document.getElementById("proj-status");
+    const stTxt = document.getElementById("proj-status-text");
+
+    if (!data.project) {
+      badge.textContent = "No project open";
+      stTxt.textContent = "Open a project in the Annotator first.";
+      st.classList.add("err");
+      disableAll(true);
+      return;
+    }
+
+    badge.innerHTML = `<strong>${data.name}</strong>`;
+    let msg = `${data.mask_count} mask${data.mask_count !== 1 ? "s" : ""} segmented`;
+    if (data.has_features) {
+      msg += `  ·  ${data.n_features} tag${data.n_features !== 1 ? "s" : ""} in features.csv`;
+    } else {
+      msg += "  ·  features.csv not yet generated";
+    }
+    stTxt.textContent = msg;
+    st.classList.add("ok");
+    disableAll(false);
+  } catch (e) {
+    document.getElementById("proj-status-text").textContent = "Could not reach server.";
+    document.getElementById("proj-status").classList.add("err");
+  }
+}
+
+function disableAll(disabled) {
+  document.getElementById("btn-analyze").disabled = disabled;
+  document.getElementById("btn-cluster").disabled = disabled;
+}
+
+// ── k → rebuild colour pickers ───────────────────────────────────────────────
+function onKChange() {
+  const k = parseInt(document.getElementById("inp-k").value, 10);
+  if (!isNaN(k) && k >= 2 && k <= 20) {
+    // preserve existing colours where possible
+    const existing = getColors();
+    currentK = k;
+    buildColorGrid(k, existing);
+  }
+}
+
+function buildColorGrid(k, existing) {
+  const grid = document.getElementById("color-grid");
+  grid.innerHTML = "";
+  for (let i = 0; i < k; i++) {
+    const color = (existing && existing[i]) || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
+    const cell  = document.createElement("div");
+    cell.className = "color-cell";
+    cell.innerHTML = `
+      <input type="color" id="color-${i}" value="${color}" title="Family ${i+1}">
+      <label>F${i+1}</label>
+    `;
+    grid.appendChild(cell);
+  }
+}
+
+function getColors() {
+  const colors = [];
+  for (let i = 0; i < currentK; i++) {
+    const el = document.getElementById(`color-${i}`);
+    if (el) colors.push(el.value);
+  }
+  return colors;
+}
+
+// ── Run a script ─────────────────────────────────────────────────────────────
+function runScript(script) {
+  if (running) return;
+  running = true;
+
+  const btnEl  = document.getElementById(`btn-${script}`);
+  const spinEl = document.getElementById(`spin-${script}`);
+  const lblEl  = document.getElementById(`lbl-${script}`);
+
+  btnEl.disabled = true;
+  spinEl.style.display = "block";
+  lblEl.textContent = script === "analyze" ? "Running…" : "Running…";
+
+  logLine(`▶ Starting ${script}.py…`, "head");
+
+  // Build SSE URL
+  const params = new URLSearchParams({ script });
+  if (script === "cluster") {
+    params.set("k",    document.getElementById("inp-k").value    || "5");
+    params.set("reps", document.getElementById("inp-reps").value || "3");
+    const colors = getColors().join(",");
+    if (colors) params.set("colors", colors);
+    const grid = document.getElementById("inp-grid").value.trim();
+    if (grid)   params.set("grid", grid);
+  }
+
+  // Close any existing stream
+  if (es) { es.close(); es = null; }
+
+  es = new EventSource(`/api/pipeline/run?${params.toString()}`);
+
+  es.onmessage = (e) => {
+    const raw = e.data;
+    if (raw === "[end]") {
+      es.close(); es = null;
+      running = false;
+      btnEl.disabled = false;
+      spinEl.style.display = "none";
+      lblEl.textContent = script === "analyze" ? "▶ Run Feature Extraction" : "▶ Run Clustering";
+      return;
+    }
+    if (raw.startsWith("[start]")) { logLine(raw.slice(8), "dim"); return; }
+    if (raw.startsWith("[done]"))  { logLine(raw.slice(7), "ok");  return; }
+    if (raw.startsWith("[error]")) { logLine(raw.slice(8), "err"); return; }
+    logLine(raw);
+  };
+
+  es.onerror = () => {
+    logLine("Connection lost — server may have stopped.", "err");
+    es.close(); es = null;
+    running = false;
+    btnEl.disabled = false;
+    spinEl.style.display = "none";
+    lblEl.textContent = script === "analyze" ? "▶ Run Feature Extraction" : "▶ Run Clustering";
+  };
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+function logLine(text, cls) {
+  const log  = document.getElementById("log");
+  const line = document.createElement("span");
+  line.className = "log-line" + (cls ? ` ${cls}` : "");
+  line.textContent = text + "\n";
+
+  // Colour-code common patterns automatically
+  if (!cls) {
+    if (/✓/.test(text))   line.classList.add("ok");
+    else if (/✗|error|Error|fail|Fail/.test(text)) line.classList.add("err");
+    else if (/⚠|warn|Warn/.test(text))  line.classList.add("warn");
+    else if (/^[\s│├└─]/.test(text) || text === "") line.classList.add("dim");
+  }
+
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById("log").innerHTML = "";
+}
+</script>
+</body>
+</html>

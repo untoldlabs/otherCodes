@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>other.codes — Tag Annotator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0e0e0e; color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid #2a2a2a;
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  header h1 { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.05em; }
+  header .sub { font-size: 11px; color: #555; }
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  .sidebar {
+    width: 180px; border-right: 1px solid #2a2a2a;
+    overflow-y: auto; flex-shrink: 0; padding: 6px 0;
+  }
+  .photo-item {
+    padding: 6px 10px; cursor: pointer; font-size: 11px; color: #777;
+    display: flex; align-items: center; gap: 7px; overflow: hidden; position: relative;
+  }
+  .photo-item:hover { background: #1a1a1a; color: #ccc; }
+  .photo-item.active { background: #1e2a3a; color: #fff; }
+  .photo-item .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: #333; }
+  .photo-item.done .dot { background: #3a9; }
+  .photo-item .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .photo-item .del-btn, .photo-item .dup-btn {
+    display: none; flex-shrink: 0; width: 16px; height: 16px;
+    border-radius: 3px; border: none; cursor: pointer; font-size: 11px; line-height: 1;
+    align-items: center; justify-content: center;
+  }
+  .photo-item .del-btn { background: #4a1a1a; color: #cf6679; }
+  .photo-item .dup-btn { background: #1a3a2a; color: #4a9; }
+  .photo-item:hover .del-btn, .photo-item:hover .dup-btn { display: flex; }
+  .photo-item .del-btn:hover { background: #7c2020; color: #fff; }
+  .photo-item .dup-btn:hover { background: #1a5a3a; color: #6fd; }
+
+  /* Preprocess panel */
+  .preprocess-section { border: 1px solid #2a2a2a; border-radius: 6px; overflow: hidden; }
+  .preprocess-header {
+    padding: 7px 10px; font-size: 11px; font-weight: 600; color: #666;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    background: #141414; user-select: none;
+  }
+  .preprocess-header:hover { color: #aaa; }
+  .preprocess-header .arrow { font-size: 9px; transition: transform 0.15s; }
+  .preprocess-header.open .arrow { transform: rotate(90deg); }
+  .preprocess-body { display: none; padding: 10px; background: #0e0e0e; flex-direction: column; gap: 8px; }
+  .preprocess-body.open { display: flex; }
+  .pp-row { display: flex; flex-direction: column; gap: 3px; }
+  .pp-label { display: flex; justify-content: space-between; font-size: 10px; color: #555; }
+  .pp-label span { color: #777; }
+  input[type=range].pp { width: 100%; accent-color: #4a6fa5; height: 14px; }
+  .pp-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; cursor: pointer; }
+  .pp-check input { accent-color: #4a6fa5; }
+  .pp-actions { display: flex; gap: 6px; margin-top: 2px; }
+  .pp-actions .btn { font-size: 10px; padding: 5px 8px; }
+
+  .canvas-wrap {
+    flex: 1; overflow: hidden; position: relative; background: #111;
+  }
+  canvas.main-canvas {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0;
+  }
+  canvas.brush-canvas {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; pointer-events: none;
+  }
+  .canvas-wrap.cur-crosshair { cursor: crosshair; }
+  .canvas-wrap.cur-brush { cursor: none; }
+  .canvas-wrap.cur-pan { cursor: grab; }
+  .canvas-wrap.cur-pan.panning { cursor: grabbing; }
+
+  /* Brush cursor */
+  #brush-cursor {
+    position: fixed; border-radius: 50%; pointer-events: none;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    display: none; transform: translate(-50%, -50%);
+    z-index: 100;
+  }
+
+  .controls {
+    width: 220px; border-left: 1px solid #2a2a2a; flex-shrink: 0;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+  }
+  .section-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+
+  /* Tool tabs */
+  .tool-tabs { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #2a2a2a; }
+  .tool-tab {
+    flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 600;
+    border: none; cursor: pointer; background: #1a1a1a; color: #555; transition: all 0.12s;
+  }
+  .tool-tab.active { background: #1e2a3a; color: #7eb8f7; }
+
+  .tool-panel { display: none; flex-direction: column; gap: 10px; }
+  .tool-panel.active { display: flex; }
+
+  .mode-toggle { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #2a2a2a; }
+  .mode-btn {
+    flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 600;
+    border: none; cursor: pointer; background: #1a1a1a; color: #555; transition: all 0.12s;
+  }
+  .mode-btn.fg.active    { background: #1a4a2a; color: #4caf7d; }
+  .mode-btn.bg.active    { background: #4a1a1a; color: #cf6679; }
+  .mode-btn.box.active   { background: #2a2a4a; color: #7090ef; }
+  .mode-btn.pan.active   { background: #2a2a2a; color: #aaa; }
+  .mode-btn.lasso.active { background: #2a1a10; color: #e09030; }
+  .mode-btn.add.active    { background: #1a3a2a; color: #4caf7d; }
+  .mode-btn.amber.active  { background: #2a1e10; color: #d4872a; }
+
+  .lasso-info {
+    font-size: 10px; color: #e09030;
+    background: #1a1008; border: 1px solid #4a3010;
+    border-radius: 4px; padding: 4px 8px; text-align: center; display: none;
+  }
+
+  .btn {
+    padding: 9px 12px; border-radius: 6px; border: none;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+    width: 100%; transition: all 0.12s;
+  }
+  .btn:disabled { opacity: 0.3; cursor: default; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .btn-success:hover:not(:disabled) { background: #15803d; }
+  .btn-ghost { background: #1a1a1a; color: #777; border: 1px solid #2a2a2a; }
+  .btn-ghost:hover:not(:disabled) { background: #242424; color: #aaa; }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-row .btn { flex: 1; }
+
+  .status { font-size: 11px; color: #555; text-align: center; min-height: 14px; }
+  .status.ok { color: #3a9; }
+  .status.err { color: #e55; }
+  .progress { font-size: 11px; color: #3a3a3a; text-align: center; }
+  .divider { border-top: 1px solid #1a1a1a; }
+  .hint { font-size: 10px; color: #3a3a3a; line-height: 1.6; }
+  .hint b { color: #555; }
+
+  .zoom-controls { display: flex; gap: 6px; align-items: center; }
+  .zoom-btn {
+    width: 26px; height: 26px; border-radius: 5px;
+    background: #1a1a1a; border: 1px solid #2a2a2a;
+    color: #777; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-btn:hover { background: #242424; color: #aaa; }
+  .zoom-label { font-size: 11px; color: #555; flex: 1; text-align: center; }
+
+  input[type=range] { width: 100%; accent-color: #2563eb; }
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  .slider-row span { font-size: 11px; color: #555; min-width: 28px; text-align: right; }
+
+  .box-info {
+    font-size: 10px; color: #7090ef;
+    background: #1a1a2a; border: 1px solid #2a2a4a;
+    border-radius: 4px; padding: 4px 8px; text-align: center; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="brush-cursor"></div>
+
+<header>
+  <h1>other.codes</h1>
+  <span class="sub" id="project-name">Tag Annotator</span>
+  <span style="flex:1"></span>
+  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="showIngest()">⊕ Ingest</button>
+  <a class="btn btn-ghost" href="/pipeline" style="font-size:11px;padding:4px 10px;text-decoration:none">⚙ Pipeline</a>
+  <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="closeProject()">⇦ Projects</button>
+</header>
+
+<!-- Ingest modal -->
+<div id="ingest-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:24px;width:420px;display:flex;flex-direction:column;gap:14px;">
+    <div style="font-size:14px;font-weight:600;color:#ddd">⊕ Ingest Photos</div>
+    <div style="font-size:12px;color:#555">Paste the path to a folder of photos. They will be copied into this project.</div>
+    <input id="ingest-path" type="text" placeholder="/Users/you/Desktop/photos"
+           style="background:#1e1e1e;border:1px solid #333;border-radius:6px;color:#ccc;font-size:12px;padding:9px 12px;font-family:monospace;width:100%"
+           onkeydown="if(event.key==='Enter') runIngest()">
+    <div id="ingest-status" style="font-size:12px;color:#888;min-height:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="hideIngest()">Cancel</button>
+      <button class="btn btn-primary" id="btn-ingest-run" onclick="runIngest()">Ingest →</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar" id="sidebar"></div>
+
+  <div class="canvas-wrap cur-crosshair" id="wrap">
+    <img id="photo-img" style="position:absolute;top:0;left:0;transform-origin:0 0;display:block;pointer-events:none;max-width:none;">
+    <canvas class="main-canvas" id="canvas"></canvas>
+    <canvas class="brush-canvas" id="brush-canvas"></canvas>
+  </div>
+
+  <div class="controls">
+
+    <!-- Preprocess -->
+    <div class="preprocess-section">
+      <div class="preprocess-header" onclick="togglePreprocess(this)">
+        ⚙ Preprocess <span class="arrow">▶</span>
+      </div>
+      <div class="preprocess-body" id="pp-body">
+        <div class="pp-row">
+          <div class="pp-label">Blur <span id="pp-blur-val">0</span></div>
+          <input type="range" class="pp" id="pp-blur" min="0" max="100" step="1" value="0" oninput="onPP()">
+        </div>
+        <div class="pp-row">
+          <div class="pp-label">Brightness <span id="pp-bright-val">0</span></div>
+          <input type="range" class="pp" id="pp-bright" min="-100" max="100" step="1" value="0" oninput="onPP()">
+        </div>
+        <div class="pp-row">
+          <div class="pp-label">Contrast <span id="pp-contrast-val">1.0</span></div>
+          <input type="range" class="pp" id="pp-contrast" min="0.1" max="4" step="0.05" value="1" oninput="onPP()">
+        </div>
+        <div class="pp-row">
+          <label class="pp-check"><input type="checkbox" id="pp-thresh-on" onchange="onPP()"> Threshold</label>
+          <input type="range" class="pp" id="pp-thresh" min="0" max="255" step="1" value="128" oninput="onPP()">
+          <div class="pp-label" style="margin-top:2px"><span></span><span id="pp-thresh-val">128</span></div>
+        </div>
+        <label class="pp-check"><input type="checkbox" id="pp-invert" onchange="onPP()"> Invert</label>
+        <div class="pp-actions">
+          <button class="btn btn-ghost" onclick="applyThreshold()">Apply threshold</button>
+          <button class="btn btn-ghost" onclick="resetPP()">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tool selector -->
+    <div>
+      <div class="section-label">Method</div>
+      <div class="tool-tabs">
+        <button class="tool-tab active" onclick="switchTool('sam')">SAM</button>
+        <button class="tool-tab" onclick="switchTool('paint')">Paint (RF)</button>
+      </div>
+    </div>
+
+    <!-- ── SAM panel ── -->
+    <div class="tool-panel active" id="panel-sam">
+      <div>
+        <div class="section-label">Click mode</div>
+        <div class="mode-toggle">
+          <button class="mode-btn fg active" id="btn-fg" onclick="setPointMode('fg')" title="f">+ Tag</button>
+          <button class="mode-btn bg" id="btn-bg" onclick="setPointMode('bg')" title="b">− Back</button>
+          <button class="mode-btn box" id="btn-box" onclick="setPointMode('box')" title="x">⬚ Box</button>
+          <button class="mode-btn lasso" id="btn-lasso-sam" onclick="setPointMode('lasso')" title="l">⌾ Lasso</button>
+          <button class="mode-btn pan" id="btn-pan-sam" onclick="setPointMode('pan')" title="p">✥ Pan</button>
+        </div>
+      </div>
+
+      <div class="box-info" id="box-info">Box prompt active</div>
+      <div class="lasso-info" id="lasso-info-sam">Lasso active — draw around tag</div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#666;cursor:pointer">
+        <input type="checkbox" id="chk-invert" style="accent-color:#7090ef">
+        Dark tag on light background
+      </label>
+
+      <button class="btn btn-primary" id="btn-segment" onclick="runSAM()" disabled>Segment (SAM)</button>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="undoPoint()">↩ Undo</button>
+        <button class="btn btn-ghost" onclick="clearSAM()">✕ Clear</button>
+      </div>
+
+      <div class="hint">
+        <b>Lasso (l)</b> = squiggle around tag<br>
+        <b>Box (x)</b> = rectangle region<br>
+        <b>+ / −</b> points to refine<br>
+        <b>Space</b> = hold to pan
+      </div>
+    </div>
+
+    <!-- ── Paint (RF) panel ── -->
+    <div class="tool-panel" id="panel-paint">
+      <div>
+        <div class="section-label">Paint mode</div>
+        <div class="mode-toggle">
+          <button class="mode-btn fg active" id="btn-brush-fg" onclick="setBrushMode('fg')">● Tag</button>
+          <button class="mode-btn bg" id="btn-brush-bg" onclick="setBrushMode('bg')">● Back</button>
+          <button class="mode-btn box" id="btn-brush-box" onclick="setBrushMode('box')" title="Draw box to limit prediction region">⬚ Box</button>
+          <button class="mode-btn lasso" id="btn-lasso-paint" onclick="setBrushMode('lasso')" title="l">⌾ Lasso</button>
+          <button class="mode-btn pan" id="btn-pan-paint" onclick="setBrushMode('pan')">✥ Pan</button>
+        </div>
+      </div>
+      <div class="box-info" id="rf-box-info" style="display:none">Box active — RF predicts inside only</div>
+      <div class="lasso-info" id="lasso-info-paint" style="display:none">Lasso active — draw around tag</div>
+
+      <div>
+        <div class="section-label">Erase annotations</div>
+        <div class="mode-toggle">
+          <button class="mode-btn pan active" id="btn-annot-none"  onclick="setAnnotEraseMode('none')"  title="Off">✓ Off</button>
+          <button class="mode-btn amber"      id="btn-annot-brush" onclick="setAnnotEraseMode('brush')" title="Brush to erase strokes">🖌 Brush</button>
+          <button class="mode-btn box"        id="btn-annot-flood" onclick="setAnnotEraseMode('flood')" title="Click to remove connected stroke region">⬛ Fill</button>
+        </div>
+        <div class="slider-row" id="annot-erase-size-row" style="display:none">
+          <input type="range" id="annot-erase-size" min="3" max="80" value="15" oninput="updateAnnotEraseSize()">
+          <span id="annot-erase-size-label">15</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Brush size</div>
+        <div class="slider-row">
+          <input type="range" id="brush-size" min="0.5" max="60" step="0.5" value="12" oninput="updateBrushSize()">
+          <span id="brush-size-label">12</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-classify" onclick="runRF()" disabled>Train &amp; Predict (RF)</button>
+      <div id="annot-restored-lbl" style="display:none;font-size:11px;color:#aaa;margin-top:3px;text-align:center;"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="undoStroke()">↩ Undo stroke</button>
+        <button class="btn btn-ghost" onclick="clearPaint()">✕ Clear</button>
+      </div>
+
+      <div class="hint">
+        <b>Paint green</b> on the tag<br>
+        <b>Paint red</b> on the background<br>
+        A few strokes is enough — RF generalises<br>
+        <b>Box</b> mode (SAM tab) to limit region
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Shared: zoom -->
+    <div>
+      <div class="section-label">Zoom</div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="adjustZoom(-0.25)">−</button>
+        <span class="zoom-label" id="zoom-label">100%</span>
+        <button class="zoom-btn" onclick="adjustZoom(0.25)">+</button>
+        <button class="zoom-btn" onclick="resetView()" title="Fit">⌂</button>
+        <button class="zoom-btn" id="btn-photo-toggle" onclick="togglePhoto()" title="Toggle photo (H)">📷</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Shared: result actions -->
+    <!-- Edit mask tools — hidden until a mask exists -->
+    <div id="eraser-section" style="display:none">
+      <div class="section-label">Edit mask</div>
+      <div class="mode-toggle">
+        <button class="mode-btn pan active" id="btn-erase-none"  onclick="setEraserMode('none')"  title="Off">✓ Off</button>
+        <button class="mode-btn add"        id="btn-mask-paint"  onclick="setEraserMode('paint')" title="Paint to add mask pixels">+ Add</button>
+        <button class="mode-btn bg"         id="btn-erase-brush" onclick="setEraserMode('brush')" title="Paint to erase mask pixels">− Erase</button>
+        <button class="mode-btn box"        id="btn-erase-flood" onclick="setEraserMode('flood')" title="Click to remove connected fragment">⬛ Fill</button>
+      </div>
+      <div class="slider-row" id="erase-size-row" style="display:none">
+        <input type="range" id="erase-size" min="3" max="80" value="15" oninput="updateEraseSize()">
+        <span id="erase-size-label">15</span>
+      </div>
+      <div class="hint" style="margin-top:2px">
+        <b>+ Add</b>: paint to add mask pixels<br>
+        <b>− Erase</b>: paint to remove mask pixels<br>
+        <b>Fill</b>: click → removes connected region
+      </div>
+    </div>
+
+    <!-- Overlay colour + visibility — hidden until a mask exists -->
+    <div id="mask-overlay-section" style="display:none">
+      <div class="section-label">Overlay</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost" id="btn-toggle-fg" onclick="toggleMaskVisible()" title="Toggle foreground overlay" style="min-width:44px">● FG</button>
+        <input type="color" id="mask-color-pick" value="#00e650" oninput="onMaskColor()" title="FG overlay colour"
+               style="width:32px;height:28px;padding:2px;border:1px solid #333;border-radius:4px;cursor:pointer;background:none">
+        <button class="btn btn-ghost" id="btn-toggle-bg" onclick="toggleBgVisible()" title="Toggle background overlay" style="min-width:44px;opacity:0.35">○ BG</button>
+        <input type="color" id="bg-color-pick" value="#ff6400" oninput="onBgColor()" title="BG overlay colour"
+               style="width:32px;height:28px;padding:2px;border:1px solid #333;border-radius:4px;cursor:pointer;background:none">
+      </div>
+    </div>
+
+    <button class="btn btn-ghost" id="btn-invert" onclick="invertMask()" disabled>⇄ Invert mask</button>
+    <button class="btn btn-success" id="btn-save" onclick="saveResult()" disabled>Save ✓</button>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="navigateTo(-1)">← Prev</button>
+      <button class="btn btn-ghost" onclick="navigateTo(1)">Next →</button>
+      <button class="btn btn-ghost" onclick="goToNextUnannotated()" title="Jump to next photo without a mask">★ New</button>
+    </div>
+    <button class="btn btn-ghost" id="btn-export-all" onclick="exportAll()" title="Re-export crops for all segmented photos">↻ Re-export all</button>
+
+    <div class="status" id="status"></div>
+
+    <!-- Orphan resolution panel — shown when re-export finds stems with no raw photo -->
+    <div id="orphan-panel" style="display:none; margin-top:10px; padding:10px;
+         background:#fff8e1; border:1px solid #f0c040; border-radius:6px; font-size:13px;">
+      <div style="font-weight:600; margin-bottom:6px;">⚠ No raw photo found for:</div>
+      <div id="orphan-list" style="margin-bottom:8px; font-family:monospace; font-size:12px; line-height:1.7;"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+        <button class="btn btn-ghost" style="font-size:12px; padding:4px 10px;"
+          onclick="resolveOrphans(currentOrphans, 'orphan', false)">Move to orphaned/</button>
+        <button class="btn btn-ghost" style="font-size:12px; padding:4px 10px;"
+          onclick="resolveOrphans(currentOrphans, 'exclude', false)">Move to excluded/</button>
+      </div>
+      <div id="orphan-per-stem"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="progress" id="progress"></div>
+
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const wrap       = document.getElementById('wrap');
+const canvas     = document.getElementById('canvas');
+const bCanvas    = document.getElementById('brush-canvas');
+const ctx        = canvas.getContext('2d');
+const bCtx       = bCanvas.getContext('2d');
+const photoImg   = document.getElementById('photo-img');
+const brushCursor = document.getElementById('brush-cursor');
+
+let photos = [], currentIdx = 0, currentImage = null;
+let currentOriginalSrc = null;
+
+// Viewport
+let zoom = 1, panX = 0, panY = 0, isPanning = false, panStart = null;
+let spaceDown = false;   // spacebar held → temporary pan
+
+// SAM state
+let activeTool = 'sam';      // 'sam' | 'paint'
+let pointMode  = 'fg';       // 'fg' | 'bg' | 'box' | 'lasso' | 'pan'
+let fgPoints = [], bgPoints = [];
+let boxStart = null, box = null;
+
+// Lasso state (shared between SAM and Paint)
+let lasso       = null;   // completed polygon [{x,y}, ...]  — null if none
+let lassoPoints = [];     // in-progress points
+let lassoActive = false;  // currently drawing
+
+// Paint (RF) state
+let brushMode = 'fg';        // 'fg' | 'bg' | 'pan'
+let brushRadius = 12;
+let strokes = [];            // [{mode, points, r}]
+let currentStroke = null;
+let annotationsRestored = false; // true when saved annotations loaded onto canvases
+
+// Shared result
+let currentMask = null, currentMaskImg = null;
+let maskCanvas  = null;  // editable canvas version of the mask (source of truth for save/draw)
+let displayImage = null; // preprocessed image for canvas (null = use currentImage)
+let samScore    = null;  // SAM confidence score from last /api/segment call
+let samMaskB64  = null;  // SAM mask b64 at time of SAM run — passed to RF as hint
+
+// Mask overlay appearance
+let maskVisible = true;          // foreground overlay on/off
+let maskColor   = [0, 230, 80];  // [R, G, B]
+let bgVisible   = false;         // background overlay on/off
+let bgColor     = [255, 100, 0]; // [R, G, B]
+let photoVisible = true;         // photo layer on/off
+
+// Mask eraser
+let eraserMode   = 'none'; // 'none' | 'paint' | 'brush' | 'flood'
+let eraserRadius = 15;
+let isErasing    = false;
+
+// Annotation eraser
+let annotEraseMode   = 'none'; // 'none' | 'brush' | 'flood'
+let annotEraseRadius = 15;
+let isAnnotErasing   = false;
+
+// Hidden canvases for fg/bg stroke data (image coords, full size)
+let fgStrokeCanvas = null, bgStrokeCanvas = null;
+
+// ── Ingest modal ──────────────────────────────────────────────────────────────
+async function closeProject() {
+  await fetch('/api/projects/close', {method: 'POST'});
+  window.location.href = '/projects';
+}
+
+function showIngest() {
+  const m = document.getElementById('ingest-modal');
+  m.style.display = 'flex';
+  document.getElementById('ingest-path').focus();
+  document.getElementById('ingest-status').textContent = '';
+}
+function hideIngest() {
+  document.getElementById('ingest-modal').style.display = 'none';
+}
+async function runIngest() {
+  const src = document.getElementById('ingest-path').value.trim();
+  if (!src) return;
+  document.getElementById('ingest-status').textContent = 'Copying photos…';
+  document.getElementById('btn-ingest-run').disabled = true;
+  try {
+    const res  = await fetch('/api/ingest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_dir: src}),
+    });
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('ingest-status').textContent = '✗ ' + data.error;
+      return;
+    }
+    document.getElementById('ingest-status').textContent =
+      `✓ ${data.copied} copied, ${data.skipped} skipped${data.error ? ', '+data.error+' errors' : ''}`;
+    // Refresh photo list
+    const r2   = await fetch('/api/photos');
+    photos     = await r2.json();
+    renderSidebar(); updateProgress();
+    setTimeout(hideIngest, 1800);
+  } catch(e) {
+    document.getElementById('ingest-status').textContent = '✗ ' + e.message;
+  } finally {
+    document.getElementById('btn-ingest-run').disabled = false;
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  // Show project name in header
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    const r   = await (await fetch('/api/projects')).json();
+    const active = r.projects.find(p => p.active);
+    if (active) document.getElementById('project-name').textContent = active.name;
+  } catch(e) {}
+  const res = await fetch('/api/photos');
+  photos = await res.json();
+  renderSidebar();
+  if (photos.length) loadPhoto(0);
+  updateProgress();
+}
+
+function renderSidebar() {
+  document.getElementById('sidebar').innerHTML = photos.map((p, i) => `
+    <div class="photo-item ${p.done?'done':''} ${i===currentIdx?'active':''}" onclick="loadPhoto(${i})">
+      <span class="dot"></span>
+      <span class="name">${p.stem}</span>
+      <button class="dup-btn" onclick="duplicatePhoto(event, ${i})" title="New tag from this photo">+</button>
+      <button class="del-btn" onclick="deletePhoto(event, ${i})" title="Exclude photo">×</button>
+    </div>`).join('');
+}
+
+async function loadPhoto(idx) {
+  currentIdx = idx;
+  displayImage = null;
+  samScore   = null;
+  samMaskB64 = null;
+  clearAll();
+  renderSidebar(); updateProgress();
+  const photo = photos[idx];
+  currentOriginalSrc = `/api/image/${photo.name}`;
+  photoImg.onload = async () => {
+    currentImage = photoImg; // sentinel: photo is loaded
+    canvas.width  = bCanvas.width  = photoImg.naturalWidth;
+    canvas.height = bCanvas.height = photoImg.naturalHeight;
+    fgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+    bgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+    resetView();
+    redraw();
+    // Restore any previously saved RF brush annotations
+    try {
+      const r = await fetch(`/api/annotations/${photo.stem}`);
+      if (r.ok) {
+        const annot = await r.json();
+        if (annot.exists) await restoreAnnotations(annot);
+      }
+    } catch (e) { console.warn('Could not load annotations:', e); }
+
+    // Auto-load saved mask if one exists for this photo
+    try {
+      const mr = await fetch(`/api/mask/${photo.stem}`);
+      if (mr.ok) {
+        const buf = await mr.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        applyMask(b64);
+        setStatus('Mask loaded — save to regenerate crops, or refine and re-save.');
+      }
+    } catch (e) { console.warn('Could not load mask:', e); }
+  };
+  photoImg.src = currentOriginalSrc;
+}
+
+function makeHiddenCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+// ── Tool switching ────────────────────────────────────────────────────────────
+function switchTool(tool) {
+  activeTool = tool;
+  document.querySelectorAll('.tool-tab').forEach((t,i) =>
+    t.classList.toggle('active', (i===0 && tool==='sam') || (i===1 && tool==='paint')));
+  document.getElementById('panel-sam').classList.toggle('active', tool==='sam');
+  document.getElementById('panel-paint').classList.toggle('active', tool==='paint');
+  updateCursor();
+}
+
+// ── Viewport ─────────────────────────────────────────────────────────────────
+function resetView() {
+  if (!currentImage) return;
+  const ww = wrap.clientWidth, wh = wrap.clientHeight;
+  zoom = Math.min(ww / canvas.width, wh / canvas.height, 1);
+  panX = (ww - canvas.width  * zoom) / 2;
+  panY = (wh - canvas.height * zoom) / 2;
+  applyTransform();
+}
+
+function applyTransform() {
+  const t = `translate(${panX}px,${panY}px) scale(${zoom})`;
+  photoImg.style.transform = t;
+  canvas.style.transform   = t;
+  bCanvas.style.transform  = t;
+  document.getElementById('zoom-label').textContent = Math.round(zoom*100)+'%';
+}
+
+function adjustZoom(d) {
+  const ww = wrap.clientWidth, wh = wrap.clientHeight;
+  zoomAt(ww/2, wh/2, zoom+d);
+}
+
+function zoomAt(wx, wy, nz) {
+  nz = Math.max(0.05, Math.min(12, nz));
+  const ix = (wx-panX)/zoom, iy = (wy-panY)/zoom;
+  zoom = nz; panX = wx - ix*zoom; panY = wy - iy*zoom;
+  applyTransform(); redraw(); redrawBrush();
+}
+
+function clientToImage(cx, cy) {
+  const r = wrap.getBoundingClientRect();
+  return { x: Math.round((cx-r.left-panX)/zoom), y: Math.round((cy-r.top-panY)/zoom) };
+}
+
+// ── Mouse ─────────────────────────────────────────────────────────────────────
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = wrap.getBoundingClientRect();
+  const d = e.deltaY > 0 ? -0.1 : 0.1;
+  zoomAt(e.clientX-r.left, e.clientY-r.top, zoom*(1+d));
+}, {passive:false});
+
+wrap.addEventListener('mousedown', e => {
+  if (!currentImage) return;
+  const pt = clientToImage(e.clientX, e.clientY);
+
+  // Mask edit — highest priority when a mask exists
+  if (eraserMode !== 'none' && maskCanvas) {
+    if (eraserMode === 'flood') { floodErase(pt.x, pt.y); return; }
+    isErasing = true;
+    if (eraserMode === 'paint') brushPaint(pt.x, pt.y, eraserRadius);
+    else                        brushErase(pt.x, pt.y, eraserRadius);
+    return;
+  }
+
+  // Annotation eraser — works in paint tab when strokes exist
+  if (annotEraseMode !== 'none' && activeTool === 'paint' && fgStrokeCanvas) {
+    if (annotEraseMode === 'flood') { annotFloodErase(pt.x, pt.y); return; }
+    isAnnotErasing = true;
+    annotBrushErase(pt.x, pt.y, annotEraseRadius);
+    return;
+  }
+
+  // Spacebar pan (temporary pan regardless of active tool)
+  if (spaceDown) {
+    isPanning = true;
+    panStart = {mx:e.clientX, my:e.clientY, px:panX, py:panY};
+    wrap.classList.add('panning');
+    return;
+  }
+
+  // Pan button
+  const panActive = (activeTool==='sam' && pointMode==='pan') ||
+                    (activeTool==='paint' && brushMode==='pan');
+  if (panActive) {
+    isPanning = true;
+    panStart = {mx:e.clientX, my:e.clientY, px:panX, py:panY};
+    wrap.classList.add('panning');
+    return;
+  }
+
+  // Lasso (shared between SAM and Paint tabs)
+  const lassoMode = (activeTool==='sam' && pointMode==='lasso') ||
+                    (activeTool==='paint' && brushMode==='lasso');
+  if (lassoMode) {
+    lasso = null; lassoPoints = [{x:pt.x, y:pt.y}]; lassoActive = true;
+    redraw(); return;
+  }
+
+  if (activeTool === 'sam') {
+    if (pointMode === 'box') { boxStart = pt; box = null; lasso = null; return; }
+
+    // Check click-to-remove existing point
+    const R = 14/zoom;
+    for (let i=fgPoints.length-1; i>=0; i--) {
+      if (dist(fgPoints[i], pt) < R) { fgPoints.splice(i,1); updateSAMBtn(); redraw(); return; }
+    }
+    for (let i=bgPoints.length-1; i>=0; i--) {
+      if (dist(bgPoints[i], pt) < R) { bgPoints.splice(i,1); updateSAMBtn(); redraw(); return; }
+    }
+    if (pointMode==='fg') fgPoints.push([pt.x, pt.y]);
+    else if (pointMode==='bg') bgPoints.push([pt.x, pt.y]);
+    updateSAMBtn(); redraw();
+
+  } else { // paint
+    if (brushMode === 'box') { boxStart = pt; box = null; lasso = null; return; }
+    currentStroke = {mode: brushMode, points: [[pt.x, pt.y]], r: brushRadius};
+    paintPoint(pt.x, pt.y, brushMode, brushRadius);
+    updateRFBtn();
+  }
+});
+
+wrap.addEventListener('mousemove', e => {
+  // Update brush cursor
+  brushCursor.style.left = e.clientX + 'px';
+  brushCursor.style.top  = e.clientY + 'px';
+
+  if (isPanning && panStart) {
+    panX = panStart.px + (e.clientX - panStart.mx);
+    panY = panStart.py + (e.clientY - panStart.my);
+    applyTransform(); return;
+  }
+
+  if (lassoActive) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    // Throttle: only add point if moved ≥4 image pixels from last
+    const last = lassoPoints[lassoPoints.length-1];
+    if (Math.hypot(pt.x-last.x, pt.y-last.y) >= 4) {
+      lassoPoints.push({x:pt.x, y:pt.y});
+      redraw();
+    }
+    return;
+  }
+
+  if (boxStart) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    box = normRect(boxStart, pt);
+    redraw(); return;
+  }
+
+  if (isErasing && (eraserMode === 'brush' || eraserMode === 'paint') && maskCanvas) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    if (eraserMode === 'paint') brushPaint(pt.x, pt.y, eraserRadius);
+    else                        brushErase(pt.x, pt.y, eraserRadius);
+    return;
+  }
+
+  if (isAnnotErasing && annotEraseMode === 'brush' && fgStrokeCanvas) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    annotBrushErase(pt.x, pt.y, annotEraseRadius);
+    return;
+  }
+
+  if (activeTool === 'paint' && currentStroke) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    currentStroke.points.push([pt.x, pt.y]);
+    paintPoint(pt.x, pt.y, currentStroke.mode, currentStroke.r);
+  }
+});
+
+wrap.addEventListener('mouseup', e => {
+  wrap.classList.remove('panning');
+  if (isErasing)      { isErasing      = false; return; }
+  if (isAnnotErasing) { isAnnotErasing = false; return; }
+  if (isPanning) { isPanning = false; panStart = null; return; }
+
+  // Finalise lasso
+  if (lassoActive) {
+    lassoActive = false;
+    if (lassoPoints.length > 5) {
+      lasso = lassoPoints.slice();
+      document.getElementById('lasso-info-sam').style.display   = activeTool==='sam'   ? 'block' : 'none';
+      document.getElementById('lasso-info-paint').style.display = activeTool==='paint' ? 'block' : 'none';
+    } else {
+      lasso = null;  // too short — discard
+    }
+    lassoPoints = [];
+    updateSAMBtn(); updateRFBtn(); redraw(); return;
+  }
+
+  if (boxStart && (pointMode === 'box' || brushMode === 'box')) {
+    const pt = clientToImage(e.clientX, e.clientY);
+    box = normRect(boxStart, pt);
+    boxStart = null;
+    if (box.w < 5 || box.h < 5) box = null;
+    document.getElementById('box-info').style.display      = (box && activeTool==='sam')   ? 'block' : 'none';
+    document.getElementById('rf-box-info').style.display   = (box && activeTool==='paint') ? 'block' : 'none';
+    updateSAMBtn(); updateRFBtn(); redraw(); return;
+  }
+
+  if (activeTool === 'paint' && currentStroke) {
+    strokes.push(currentStroke);
+    currentStroke = null;
+    updateRFBtn();
+  }
+});
+
+wrap.addEventListener('mouseleave', () => {
+  brushCursor.style.display = 'none';
+  isErasing = false;
+  isAnnotErasing = false;
+  if (currentStroke) { strokes.push(currentStroke); currentStroke = null; updateRFBtn(); }
+});
+
+wrap.addEventListener('mouseenter', () => {
+  if ((activeTool==='paint' && brushMode!=='pan') ||
+      eraserMode==='brush' || eraserMode==='paint' ||
+      annotEraseMode==='brush')
+    brushCursor.style.display = 'block';
+});
+
+// ── SAM mode ──────────────────────────────────────────────────────────────────
+function setPointMode(m) {
+  pointMode = m;
+  document.getElementById('btn-fg').classList.toggle('active',       m==='fg');
+  document.getElementById('btn-bg').classList.toggle('active',       m==='bg');
+  document.getElementById('btn-box').classList.toggle('active',      m==='box');
+  document.getElementById('btn-lasso-sam').classList.toggle('active',m==='lasso');
+  document.getElementById('btn-pan-sam').classList.toggle('active',  m==='pan');
+  document.getElementById('lasso-info-sam').style.display = m==='lasso' ? 'block' : 'none';
+  updateCursor();
+}
+
+function updateCursor() {
+  wrap.className = 'canvas-wrap';
+  if (spaceDown) {
+    // Spacebar overrides everything — show grab cursor
+    brushCursor.style.display = 'none';
+    wrap.classList.add('cur-pan');
+    return;
+  }
+  if (annotEraseMode === 'brush') {
+    wrap.classList.add('cur-brush');
+    brushCursor.style.display = 'block';
+    brushCursor.style.borderColor = 'rgba(212,135,42,0.9)';
+    const sr = annotEraseRadius * zoom;
+    brushCursor.style.width = (sr*2)+'px'; brushCursor.style.height = (sr*2)+'px';
+  } else if (annotEraseMode === 'flood') {
+    wrap.classList.add('cur-crosshair');
+    brushCursor.style.display = 'none';
+  } else if (eraserMode === 'paint') {
+    wrap.classList.add('cur-brush');
+    brushCursor.style.display = 'block';
+    brushCursor.style.borderColor = 'rgba(76,207,120,0.9)';
+    const sr = eraserRadius * zoom;
+    brushCursor.style.width = (sr*2)+'px'; brushCursor.style.height = (sr*2)+'px';
+  } else if (eraserMode === 'brush') {
+    wrap.classList.add('cur-brush');
+    brushCursor.style.display = 'block';
+    brushCursor.style.borderColor = 'rgba(255,100,100,0.85)';
+    const sr = eraserRadius * zoom;
+    brushCursor.style.width = (sr*2)+'px'; brushCursor.style.height = (sr*2)+'px';
+  } else if (eraserMode === 'flood') {
+    wrap.classList.add('cur-crosshair');
+    brushCursor.style.display = 'none';
+  } else if ((activeTool==='sam' && pointMode==='lasso') ||
+             (activeTool==='paint' && brushMode==='lasso')) {
+    wrap.classList.add('cur-crosshair');   // crosshair while lassoing
+    brushCursor.style.display = 'none';
+  } else if (activeTool==='paint' && brushMode!=='pan') {
+    wrap.classList.add('cur-brush');
+    brushCursor.style.display = 'block';
+    brushCursor.style.borderColor = 'rgba(255,255,255,0.7)';
+  } else {
+    brushCursor.style.display = 'none';
+    const panActive = (activeTool==='sam' && pointMode==='pan') ||
+                      (activeTool==='paint' && brushMode==='pan');
+    wrap.classList.add(panActive ? 'cur-pan' : 'cur-crosshair');
+  }
+}
+
+function undoPoint() {
+  if (bgPoints.length) bgPoints.pop();
+  else if (fgPoints.length) fgPoints.pop();
+  updateSAMBtn(); redraw();
+}
+
+function clearSAM() {
+  fgPoints=[]; bgPoints=[]; box=null; boxStart=null;
+  clearLasso();
+  document.getElementById('box-info').style.display='none';
+  clearResult(); updateSAMBtn(); redraw();
+}
+
+function clearLasso() {
+  lasso=null; lassoPoints=[]; lassoActive=false;
+  document.getElementById('lasso-info-sam').style.display  = 'none';
+  document.getElementById('lasso-info-paint').style.display= 'none';
+}
+
+function updateSAMBtn() {
+  document.getElementById('btn-segment').disabled = !fgPoints.length && !box && !lasso;
+}
+
+// ── Paint (RF) mode ───────────────────────────────────────────────────────────
+function setBrushMode(m) {
+  brushMode = m;
+  document.getElementById('btn-brush-fg').classList.toggle('active',    m==='fg');
+  document.getElementById('btn-brush-bg').classList.toggle('active',    m==='bg');
+  document.getElementById('btn-brush-box').classList.toggle('active',   m==='box');
+  document.getElementById('btn-lasso-paint').classList.toggle('active', m==='lasso');
+  document.getElementById('btn-pan-paint').classList.toggle('active',   m==='pan');
+  document.getElementById('lasso-info-paint').style.display = m==='lasso' ? 'block' : 'none';
+  updateCursor();
+}
+
+function updateBrushSize() {
+  brushRadius = parseFloat(document.getElementById('brush-size').value);
+  document.getElementById('brush-size-label').textContent = brushRadius;
+  const screenR = brushRadius * zoom;
+  brushCursor.style.width  = (screenR*2)+'px';
+  brushCursor.style.height = (screenR*2)+'px';
+}
+
+function paintPoint(x, y, mode, r) {
+  // Paint on hidden stroke canvases
+  const sc = mode==='fg' ? fgStrokeCanvas : bgStrokeCanvas;
+  const sc2 = sc.getContext('2d');
+  sc2.fillStyle = '#fff';
+  sc2.beginPath(); sc2.arc(x, y, r, 0, Math.PI*2); sc2.fill();
+  redrawBrush();
+}
+
+function redrawBrush() {
+  bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height);
+  if (!fgStrokeCanvas) return;
+
+  // Draw fg strokes green
+  const fg = fgStrokeCanvas.getContext('2d').getImageData(0,0,bCanvas.width,bCanvas.height);
+  const out = bCtx.createImageData(bCanvas.width, bCanvas.height);
+  for (let i=0; i<fg.data.length; i+=4) {
+    if (fg.data[i] > 0) { out.data[i]=34; out.data[i+1]=197; out.data[i+2]=94; out.data[i+3]=160; }
+  }
+  // Draw bg strokes red (overlay)
+  const bg = bgStrokeCanvas.getContext('2d').getImageData(0,0,bCanvas.width,bCanvas.height);
+  for (let i=0; i<bg.data.length; i+=4) {
+    if (bg.data[i] > 0) { out.data[i]=239; out.data[i+1]=68; out.data[i+2]=68; out.data[i+3]=160; }
+  }
+  // Also draw current stroke preview
+  if (currentStroke) {
+    const color = currentStroke.mode==='fg' ? [34,197,94] : [239,68,68];
+    for (const [px,py] of currentStroke.points) {
+      const r = currentStroke.r;
+      for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++) {
+        if (dx*dx+dy*dy > r*r) continue;
+        const nx=px+dx, ny=py+dy;
+        if (nx<0||ny<0||nx>=bCanvas.width||ny>=bCanvas.height) continue;
+        const idx=(ny*bCanvas.width+nx)*4;
+        out.data[idx]=color[0]; out.data[idx+1]=color[1]; out.data[idx+2]=color[2]; out.data[idx+3]=160;
+      }
+    }
+  }
+  bCtx.putImageData(out, 0, 0);
+}
+
+function undoStroke() {
+  if (!strokes.length) return;
+  const removed = strokes.pop();
+  // Redraw stroke canvases from scratch
+  fgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+  bgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+  for (const s of strokes) {
+    const sc = s.mode==='fg' ? fgStrokeCanvas : bgStrokeCanvas;
+    const sc2 = sc.getContext('2d');
+    sc2.fillStyle='#fff';
+    for (const [px,py] of s.points) { sc2.beginPath(); sc2.arc(px,py,s.r,0,Math.PI*2); sc2.fill(); }
+  }
+  updateRFBtn(); redrawBrush();
+}
+
+function clearPaint() {
+  strokes=[]; currentStroke=null;
+  annotationsRestored = false;
+  const lbl = document.getElementById('annot-restored-lbl');
+  if (lbl) lbl.style.display = 'none';
+  if (canvas.width) {
+    fgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+    bgStrokeCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+  }
+  clearResult(); updateRFBtn(); redrawBrush();
+}
+
+function updateRFBtn() {
+  const hasFG = strokes.some(s=>s.mode==='fg') || (currentStroke?.mode==='fg');
+  const hasBG = strokes.some(s=>s.mode==='bg') || (currentStroke?.mode==='bg');
+  document.getElementById('btn-classify').disabled = !(hasFG && hasBG) && !annotationsRestored;
+}
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+function toggleMaskVisible() {
+  maskVisible = !maskVisible;
+  document.getElementById('btn-toggle-fg').style.opacity = maskVisible ? '1' : '0.35';
+  redraw();
+}
+
+function toggleBgVisible() {
+  bgVisible = !bgVisible;
+  document.getElementById('btn-toggle-bg').style.opacity = bgVisible ? '1' : '0.35';
+  redraw();
+}
+
+function onMaskColor() { maskColor = hexToRgb(document.getElementById('mask-color-pick').value); redraw(); }
+function onBgColor()   { bgColor   = hexToRgb(document.getElementById('bg-color-pick').value);   redraw(); }
+
+function togglePhoto() {
+  photoVisible = !photoVisible;
+  photoImg.style.opacity = photoVisible ? '1' : '0';
+  const btn = document.getElementById('btn-photo-toggle');
+  btn.style.opacity = photoVisible ? '1' : '0.35';
+}
+
+async function restoreAnnotations(annot) {
+  // Draw saved fg/bg brush strokes back onto the hidden canvases.
+  // This lets RF re-run without redrawing, and enables the RF button.
+  const load = (b64) => new Promise(res => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.src = 'data:image/png;base64,' + b64;
+  });
+  const [fgImg, bgImg] = await Promise.all([
+    load(annot.fg_strokes),
+    load(annot.bg_strokes),
+  ]);
+  fgStrokeCanvas.getContext('2d').drawImage(fgImg, 0, 0);
+  bgStrokeCanvas.getContext('2d').drawImage(bgImg, 0, 0);
+  annotationsRestored = true;
+
+  // Restore SAM mask if one was previously generated for this photo
+  if (annot.sam_mask) {
+    samMaskB64 = annot.sam_mask;
+    samScore   = annot.sam_score ?? null;
+    const scoreStr = samScore != null ? ` (score ${samScore.toFixed(2)})` : '';
+    console.log(`SAM mask restored${scoreStr}`);
+  }
+
+  // Restore lasso if saved (takes priority over box for display)
+  if (annot.lasso && annot.lasso.length > 5) {
+    lasso = annot.lasso.map(p => ({x: p[0], y: p[1]}));
+    document.getElementById('lasso-info-sam').style.display   = activeTool==='sam'   ? 'block' : 'none';
+    document.getElementById('lasso-info-paint').style.display = activeTool==='paint' ? 'block' : 'none';
+    redraw();
+  } else if (annot.crop && annot.crop.w > 5 && annot.crop.h > 5) {
+    // Fall back to box
+    box = annot.crop;
+    document.getElementById('box-info').style.display    = activeTool === 'sam'   ? 'block' : 'none';
+    document.getElementById('rf-box-info').style.display = activeTool === 'paint' ? 'block' : 'none';
+    redraw();
+  }
+
+  updateRFBtn();
+  // Show a subtle indicator in the paint panel label
+  const lbl = document.getElementById('annot-restored-lbl');
+  if (lbl) {
+    const t = annot.updated_at ? new Date(annot.updated_at).toLocaleDateString() : '';
+    lbl.textContent = `↺ strokes restored${t ? ' ('+t+')' : ''}`;
+    lbl.style.display = '';
+  }
+  console.log('Annotations restored for', annot);
+}
+
+// ── Eraser tools ─────────────────────────────────────────────────────────────
+function setEraserMode(m) {
+  eraserMode = m; isErasing = false;
+  document.getElementById('btn-erase-none').classList.toggle('active',  m==='none');
+  document.getElementById('btn-mask-paint').classList.toggle('active',  m==='paint');
+  document.getElementById('btn-erase-brush').classList.toggle('active', m==='brush');
+  document.getElementById('btn-erase-flood').classList.toggle('active', m==='flood');
+  document.getElementById('erase-size-row').style.display = (m==='brush' || m==='paint') ? '' : 'none';
+  updateCursor();
+}
+
+function updateEraseSize() {
+  eraserRadius = parseInt(document.getElementById('erase-size').value);
+  document.getElementById('erase-size-label').textContent = eraserRadius;
+  if (eraserMode === 'brush') {
+    const sr = eraserRadius * zoom;
+    brushCursor.style.width = (sr*2)+'px'; brushCursor.style.height = (sr*2)+'px';
+  }
+}
+
+function brushErase(x, y, r) {
+  if (!maskCanvas) return;
+  const mc = maskCanvas.getContext('2d');
+  mc.fillStyle = '#000';
+  mc.beginPath(); mc.arc(x, y, r, 0, Math.PI*2); mc.fill();
+  redraw();
+}
+
+function brushPaint(x, y, r) {
+  if (!maskCanvas) return;
+  const mc = maskCanvas.getContext('2d');
+  mc.fillStyle = '#fff';
+  mc.beginPath(); mc.arc(x, y, r, 0, Math.PI*2); mc.fill();
+  redraw();
+}
+
+function floodErase(sx, sy) {
+  if (!maskCanvas) return;
+  const mc = maskCanvas.getContext('2d');
+  const w = maskCanvas.width, h = maskCanvas.height;
+  const id = mc.getImageData(0, 0, w, h);
+  const d  = id.data;
+  sx = Math.round(sx); sy = Math.round(sy);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return;
+  if (d[(sy*w+sx)*4] < 128) return; // clicked background — nothing to do
+
+  // Iterative BFS (no call-stack limit)
+  const stack   = [sy*w+sx];
+  const visited = new Uint8Array(w*h);
+  visited[sy*w+sx] = 1;
+  while (stack.length) {
+    const p  = stack.pop();
+    const px = p % w, py = (p/w)|0;
+    d[p*4] = d[p*4+1] = d[p*4+2] = 0;
+    for (const [nx,ny] of [[px-1,py],[px+1,py],[px,py-1],[px,py+1]]) {
+      if (nx<0||ny<0||nx>=w||ny>=h) continue;
+      const np = ny*w+nx;
+      if (visited[np] || d[np*4]<128) continue;
+      visited[np]=1; stack.push(np);
+    }
+  }
+  mc.putImageData(id, 0, 0);
+  redraw();
+}
+
+// ── Annotation eraser ─────────────────────────────────────────────────────────
+function setAnnotEraseMode(m) {
+  annotEraseMode = m; isAnnotErasing = false;
+  document.getElementById('btn-annot-none').classList.toggle('active',  m==='none');
+  document.getElementById('btn-annot-brush').classList.toggle('active', m==='brush');
+  document.getElementById('btn-annot-flood').classList.toggle('active', m==='flood');
+  document.getElementById('annot-erase-size-row').style.display = m==='brush' ? '' : 'none';
+  updateCursor();
+}
+
+function updateAnnotEraseSize() {
+  annotEraseRadius = parseInt(document.getElementById('annot-erase-size').value);
+  document.getElementById('annot-erase-size-label').textContent = annotEraseRadius;
+  if (annotEraseMode === 'brush') {
+    const sr = annotEraseRadius * zoom;
+    brushCursor.style.width = (sr*2)+'px'; brushCursor.style.height = (sr*2)+'px';
+  }
+}
+
+function annotBrushErase(x, y, r) {
+  // Erase annotation pixels from both fg and bg stroke canvases
+  for (const sc of [fgStrokeCanvas, bgStrokeCanvas]) {
+    if (!sc) continue;
+    const sc2 = sc.getContext('2d');
+    sc2.fillStyle = '#000';
+    sc2.beginPath(); sc2.arc(x, y, r, 0, Math.PI*2); sc2.fill();
+  }
+  redrawBrush();
+}
+
+function annotFloodErase(sx, sy) {
+  // BFS flood-fill erase on whichever stroke canvas has a pixel at (sx,sy).
+  // Checks fg first, then bg.
+  sx = Math.round(sx); sy = Math.round(sy);
+  for (const sc of [fgStrokeCanvas, bgStrokeCanvas]) {
+    if (!sc) continue;
+    const w2 = sc.width, h2 = sc.height;
+    if (sx < 0 || sy < 0 || sx >= w2 || sy >= h2) continue;
+    const sc2 = sc.getContext('2d');
+    const id  = sc2.getImageData(0, 0, w2, h2);
+    const d   = id.data;
+    const idx = (sy * w2 + sx) * 4;
+    if (d[idx] < 128) continue;   // no stroke here — try the other canvas
+
+    const stack   = [sy * w2 + sx];
+    const visited = new Uint8Array(w2 * h2);
+    visited[sy * w2 + sx] = 1;
+    while (stack.length) {
+      const p  = stack.pop();
+      const px = p % w2, py = (p / w2) | 0;
+      d[p*4] = d[p*4+1] = d[p*4+2] = d[p*4+3] = 0;
+      for (const [nx, ny] of [[px-1,py],[px+1,py],[px,py-1],[px,py+1]]) {
+        if (nx<0||ny<0||nx>=w2||ny>=h2) continue;
+        const np = ny*w2+nx;
+        if (visited[np] || d[np*4] < 128) continue;
+        visited[np] = 1; stack.push(np);
+      }
+    }
+    sc2.putImageData(id, 0, 0);
+    redrawBrush();
+    return;   // done — only erase from one canvas per click
+  }
+}
+
+// ── Main canvas draw ──────────────────────────────────────────────────────────
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!currentImage) return;
+  // Photo is rendered by #photo-img — canvas is overlays only (mask, box, crosshairs).
+
+  // Mask overlay — drawn from maskCanvas (editable source of truth)
+  if (maskCanvas && (maskVisible || bgVisible)) {
+    const tmp = document.createElement('canvas');
+    tmp.width=canvas.width; tmp.height=canvas.height;
+    const tc=tmp.getContext('2d');
+    tc.drawImage(maskCanvas,0,0);
+    const id=tc.getImageData(0,0,tmp.width,tmp.height); const d=id.data;
+    const [fr,fg_,fb] = maskColor;
+    const [br,bg_,bb] = bgColor;
+    for (let i=0;i<d.length;i+=4){
+      const v = d[i];
+      if (v > 128) {
+        // foreground pixel
+        if (maskVisible) { d[i]=fr; d[i+1]=fg_; d[i+2]=fb; d[i+3]=Math.round(v*.5); }
+        else             { d[i]=0;  d[i+1]=0;   d[i+2]=0;  d[i+3]=0; }
+      } else {
+        // background pixel
+        if (bgVisible)   { d[i]=br; d[i+1]=bg_; d[i+2]=bb; d[i+3]=Math.round((255-v)*.35); }
+        else             { d[i]=0;  d[i+1]=0;   d[i+2]=0;  d[i+3]=0; }
+      }
+    }
+    tc.putImageData(id,0,0); ctx.drawImage(tmp,0,0);
+  }
+
+  // Lasso polygon
+  const drawLassoPts = lasso || (lassoActive && lassoPoints.length > 1 ? lassoPoints : null);
+  if (drawLassoPts && drawLassoPts.length > 1) {
+    ctx.save();
+    // Dim outside the lasso using evenodd fill
+    ctx.fillStyle = 'rgba(0,0,0,0.48)';
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.moveTo(drawLassoPts[0].x, drawLassoPts[0].y);
+    for (let i=1; i<drawLassoPts.length; i++) ctx.lineTo(drawLassoPts[i].x, drawLassoPts[i].y);
+    ctx.closePath();
+    ctx.fill('evenodd');
+    // Draw outline
+    ctx.strokeStyle = '#e09030';
+    ctx.lineWidth   = 2/zoom;
+    ctx.setLineDash([6/zoom, 3/zoom]);
+    ctx.beginPath();
+    ctx.moveTo(drawLassoPts[0].x, drawLassoPts[0].y);
+    for (let i=1; i<drawLassoPts.length; i++) ctx.lineTo(drawLassoPts[i].x, drawLassoPts[i].y);
+    if (lasso) ctx.closePath();   // close when finalised, open while drawing
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Box prompt (only when no lasso active)
+  if (!lasso && (box || boxStart)) {
+    const r = box||{x:0,y:0,w:0,h:0};
+    ctx.strokeStyle='#7090ef'; ctx.lineWidth=2/zoom;
+    ctx.setLineDash([6/zoom,4/zoom]);
+    ctx.strokeRect(r.x,r.y,r.w,r.h);
+    ctx.fillStyle='rgba(70,90,220,0.08)'; ctx.fillRect(r.x,r.y,r.w,r.h);
+    ctx.setLineDash([]);
+    // Dim outside
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,canvas.width,r.y);
+    ctx.fillRect(0,r.y+r.h,canvas.width,canvas.height-r.y-r.h);
+    ctx.fillRect(0,r.y,r.x,r.h);
+    ctx.fillRect(r.x+r.w,r.y,canvas.width-r.x-r.w,r.h);
+  }
+
+  // SAM crosshairs
+  if (activeTool==='sam') {
+    const ARM=7/zoom, LW=1.5/zoom;
+    const drawX = (x,y,col) => {
+      ctx.save();
+      ctx.strokeStyle='#000'; ctx.lineWidth=LW*2.5;
+      ctx.beginPath(); ctx.moveTo(x-ARM,y); ctx.lineTo(x+ARM,y);
+      ctx.moveTo(x,y-ARM); ctx.lineTo(x,y+ARM); ctx.stroke();
+      ctx.strokeStyle=col; ctx.lineWidth=LW;
+      ctx.beginPath(); ctx.moveTo(x-ARM,y); ctx.lineTo(x+ARM,y);
+      ctx.moveTo(x,y-ARM); ctx.lineTo(x,y+ARM); ctx.stroke();
+      ctx.restore();
+    };
+    fgPoints.forEach(([x,y])=>drawX(x,y,'#22c55e'));
+    bgPoints.forEach(([x,y])=>drawX(x,y,'#ef4444'));
+  }
+}
+
+// ── SAM segmentation ──────────────────────────────────────────────────────────
+async function runSAM() {
+  const photo = photos[currentIdx];
+  setStatus('Running SAM...');
+  document.getElementById('btn-segment').disabled=true;
+  try {
+    const pp = getPP();
+    // SAM invert checkbox overrides preprocess invert
+    if (document.getElementById('chk-invert').checked) pp.invert = true;
+    const body = {
+      stem: photo.stem, fg_points: fgPoints, bg_points: bgPoints,
+      preprocess: pp
+    };
+    if (lasso && lasso.length > 2) body.lasso = lasso.map(p => [p.x, p.y]);
+    else if (box) body.crop = box;
+    const res = await fetch('/api/segment', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (data.error) { setStatus(data.error, true); return; }
+    samScore   = data.score ?? null;
+    samMaskB64 = data.mask;          // stash for RF hint
+    applyMask(data.mask);
+    const scoreStr = samScore != null ? ` (score ${samScore.toFixed(2)})` : '';
+    setStatus(`SAM done${scoreStr} — save, or refine with RF strokes.`);
+  } catch(e) { setStatus('Error: '+e.message, true); }
+  finally { updateSAMBtn(); }
+}
+
+// ── RF classification ─────────────────────────────────────────────────────────
+async function runRF() {
+  const photo    = photos[currentIdx];
+  const usingSAM = samMaskB64 != null;
+  const modeStr  = usingSAM ? 'SAM → RF' : 'RF';
+  setStatus(`Training ${modeStr}... (may take 10–30s)`);
+  document.getElementById('btn-classify').disabled=true;
+
+  try {
+    const fgB64 = canvasToB64(fgStrokeCanvas);
+    const bgB64 = canvasToB64(bgStrokeCanvas);
+    const body  = {
+      stem:       photo.stem,
+      fg_strokes: fgB64,
+      bg_strokes: bgB64,
+      preprocess: getPP(),
+    };
+    if (lasso && lasso.length > 2) body.lasso = lasso.map(p => [p.x, p.y]);
+    else if (box) body.crop = box;
+    if (usingSAM) {
+      body.sam_hint  = samMaskB64;               // SAM soft mask as extra features
+      body.sam_score = samScore;
+    }
+
+    const res = await fetch('/api/classify', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch { throw new Error(`Server (HTTP ${res.status}): ${raw.slice(0, 200)}`); }
+    if (data.error) { setStatus(data.error, true); return; }
+    applyMask(data.mask);
+    const pipeline = data.pipeline || modeStr;
+    setStatus(`Done [${pipeline}] — save or refine.`);
+  } catch(e) { setStatus('Error: '+e.message, true); }
+  finally { updateRFBtn(); }
+}
+
+function canvasToB64(c) {
+  return c.toDataURL('image/png').split(',')[1];
+}
+
+
+// ── Shared result ─────────────────────────────────────────────────────────────
+function applyMask(maskB64) {
+  currentMask = maskB64;
+  currentMaskImg = new Image();
+  currentMaskImg.onload = () => {
+    maskCanvas = makeHiddenCanvas(canvas.width, canvas.height);
+    const mc = maskCanvas.getContext('2d');
+    mc.drawImage(currentMaskImg, 0, 0);
+
+    // Clip mask to lasso polygon if one is active.
+    // Uses destination-in: keeps only pixels inside the polygon path.
+    if (lasso && lasso.length > 2) {
+      mc.globalCompositeOperation = 'destination-in';
+      mc.fillStyle = '#fff';
+      mc.beginPath();
+      mc.moveTo(lasso[0].x, lasso[0].y);
+      for (let i = 1; i < lasso.length; i++) mc.lineTo(lasso[i].x, lasso[i].y);
+      mc.closePath();
+      mc.fill();
+      mc.globalCompositeOperation = 'source-over';
+    }
+
+    redraw();
+  };
+  currentMaskImg.src = 'data:image/png;base64,' + maskB64;
+  document.getElementById('btn-save').disabled=false;
+  document.getElementById('btn-invert').disabled=false;
+  document.getElementById('eraser-section').style.display='';
+  document.getElementById('mask-overlay-section').style.display='';
+}
+
+function invertMask() {
+  if (!maskCanvas) return;
+  const mc=maskCanvas.getContext('2d');
+  const id=mc.getImageData(0,0,maskCanvas.width,maskCanvas.height); const d=id.data;
+  for (let i=0;i<d.length;i+=4){ const v=255-d[i]; d[i]=v;d[i+1]=v;d[i+2]=v;d[i+3]=255; }
+  mc.putImageData(id,0,0);
+  redraw();
+}
+
+function clearResult() {
+  currentMask=null; currentMaskImg=null; maskCanvas=null;
+  document.getElementById('btn-save').disabled=true;
+  document.getElementById('btn-invert').disabled=true;
+  document.getElementById('eraser-section').style.display='none';
+  document.getElementById('mask-overlay-section').style.display='none';
+  setEraserMode('none');
+  setStatus('');
+}
+
+function clearAll() {
+  clearSAM(); clearPaint();
+}
+
+async function saveResult() {
+  if (!maskCanvas) return;
+  const photo=photos[currentIdx]; setStatus('Saving...');
+  const maskB64 = maskCanvas.toDataURL('image/png').split(',')[1];
+  try {
+    const res=await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stem:photo.stem, mask:maskB64})});
+    const raw=await res.text(); let data;
+    try { data=JSON.parse(raw); } catch { throw new Error(`HTTP ${res.status}: ${raw.slice(0,100)}`); }
+    if (data.error) { setStatus(data.error, true); return; }
+    if (data.ok) {
+      photos[currentIdx].done=true;
+      setStatus('Saved ✓');
+      updateProgress(); renderSidebar();
+    }
+  } catch(e) { setStatus('Save failed: '+e.message, true); }
+}
+
+function navigateTo(delta) {
+  const next = currentIdx + delta;
+  if (next >= 0 && next < photos.length) loadPhoto(next);
+}
+
+let currentOrphans = [];
+
+async function exportAll() {
+  const btn = document.getElementById('btn-export-all');
+  btn.disabled = true;
+  btn.textContent = '↻ Exporting…';
+  setStatus('Re-exporting all…');
+  document.getElementById('orphan-panel').style.display = 'none';
+  try {
+    const res  = await fetch('/api/export_all', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      let msg = `Re-export done — ${data.done} exported, ${data.skipped} skipped`;
+      setStatus(msg);
+      if (data.orphans && data.orphans.length) {
+        currentOrphans = data.orphans;
+        showOrphanPanel(data.orphans);
+      }
+    } else {
+      setStatus('Export failed: ' + (data.error || 'unknown error'), true);
+    }
+  } catch(e) {
+    setStatus('Export failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Re-export all';
+  }
+}
+
+function showOrphanPanel(stems) {
+  const panel = document.getElementById('orphan-panel');
+  const list  = document.getElementById('orphan-list');
+  const perStem = document.getElementById('orphan-per-stem');
+
+  list.textContent = stems.join('\n');
+
+  // Per-stem action rows
+  perStem.innerHTML = stems.map(stem => `
+    <div style="display:flex; align-items:center; gap:6px; margin:3px 0;">
+      <code style="flex:1; font-size:11px; overflow:hidden; text-overflow:ellipsis;">${stem}</code>
+      <button class="btn btn-ghost" style="font-size:11px; padding:3px 8px; white-space:nowrap;"
+        onclick="resolveOrphans(['${stem}'], 'orphan', true)">→ orphaned/</button>
+      <button class="btn btn-ghost" style="font-size:11px; padding:3px 8px; white-space:nowrap;"
+        onclick="resolveOrphans(['${stem}'], 'exclude', true)">→ excluded/</button>
+    </div>`).join('');
+
+  panel.style.display = 'block';
+}
+
+async function resolveOrphans(stems, action, isSingle) {
+  try {
+    const res  = await fetch('/api/resolve_orphans', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ stems, action })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus(`Moved ${stems.length} stem(s) → ${data.dest}/`);
+      // Remove resolved stems from currentOrphans and refresh panel
+      currentOrphans = currentOrphans.filter(s => !stems.includes(s));
+      if (currentOrphans.length === 0) {
+        document.getElementById('orphan-panel').style.display = 'none';
+      } else {
+        showOrphanPanel(currentOrphans);
+      }
+    } else {
+      setStatus('Resolve failed', true);
+    }
+  } catch(e) {
+    setStatus('Resolve failed: ' + e.message, true);
+  }
+}
+
+function goToNextUnannotated() {
+  // Search forward from current, then wrap to start
+  const next = photos.findIndex((p, i) => i > currentIdx && !p.done);
+  if (next !== -1) { loadPhoto(next); return; }
+  const any = photos.findIndex(p => !p.done);
+  if (any !== -1) { loadPhoto(any); return; }
+  setStatus('All annotated 🎉  Run: python3 pipeline/vectorize.py');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function dist(a, b) { return Math.hypot(a[0]-b.x, a[1]-b.y); }
+function normRect(a,b) { return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(b.x-a.x),h:Math.abs(b.y-a.y)}; }
+function setStatus(msg, isErr=false) {
+  const el=document.getElementById('status');
+  el.textContent=msg;
+  el.className='status'+(isErr?' err':(msg.includes('✓')||msg.includes('🎉')?' ok':''));
+}
+function updateProgress() {
+  const done=photos.filter(p=>p.done).length;
+  document.getElementById('progress').textContent=photos.length?`${done} / ${photos.length} segmented`:'';
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT') return;
+
+  // Spacebar — hold to pan temporarily
+  if (e.code==='Space' && !spaceDown) {
+    e.preventDefault();
+    spaceDown = true;
+    updateCursor();
+    return;
+  }
+
+  if ((e.metaKey||e.ctrlKey)&&e.key==='z') { e.preventDefault(); activeTool==='sam'?undoPoint():undoStroke(); }
+  if (e.key==='f') activeTool==='sam'?setPointMode('fg'):setBrushMode('fg');
+  if (e.key==='b') activeTool==='sam'?setPointMode('bg'):setBrushMode('bg');
+  if (e.key==='x') { activeTool==='sam'?setPointMode('box'):setBrushMode('box'); }
+  if (e.key==='l') { activeTool==='sam'?setPointMode('lasso'):setBrushMode('lasso'); }
+  if (e.key==='p') activeTool==='sam'?setPointMode('pan'):setBrushMode('pan');
+  if (e.key==='h') togglePhoto();
+  if (e.key==='1') switchTool('sam');
+  if (e.key==='2') switchTool('paint');
+  if (e.key==='Enter' && activeTool==='sam') { if(!document.getElementById('btn-segment').disabled) runSAM(); }
+  if (e.key==='Enter' && activeTool==='paint') { if(!document.getElementById('btn-classify').disabled) runRF(); }
+  if ((e.metaKey||e.ctrlKey)&&e.key==='s') { e.preventDefault(); saveResult(); }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code==='Space') {
+    spaceDown = false;
+    if (isPanning) { isPanning = false; panStart = null; wrap.classList.remove('panning'); }
+    updateCursor();
+  }
+});
+
+// ── Preprocessing ─────────────────────────────────────────────────────────────
+
+function togglePreprocess(header) {
+  header.classList.toggle('open');
+  document.getElementById('pp-body').classList.toggle('open');
+}
+
+function getPP() {
+  const threshOn = document.getElementById('pp-thresh-on').checked;
+  return {
+    blur:       parseFloat(document.getElementById('pp-blur').value),
+    brightness: parseFloat(document.getElementById('pp-bright').value),
+    contrast:   parseFloat(document.getElementById('pp-contrast').value),
+    threshold:  threshOn ? parseInt(document.getElementById('pp-thresh').value) : null,
+    invert:     document.getElementById('pp-invert').checked
+  };
+}
+
+function onPP() {
+  // Update value labels
+  document.getElementById('pp-blur-val').textContent     = document.getElementById('pp-blur').value;
+  document.getElementById('pp-bright-val').textContent   = document.getElementById('pp-bright').value;
+  document.getElementById('pp-contrast-val').textContent = parseFloat(document.getElementById('pp-contrast').value).toFixed(2);
+  document.getElementById('pp-thresh-val').textContent   = document.getElementById('pp-thresh').value;
+
+  // Apply CSS filters instantly for visual feedback
+  // (approximate — server applies exact values at segment time)
+  const pp = getPP();
+  const blur       = pp.blur > 0       ? `blur(${(pp.blur * 0.15).toFixed(1)}px) ` : '';
+  const brightness = pp.brightness !== 0 ? `brightness(${(1 + pp.brightness/100).toFixed(2)}) ` : '';
+  const contrast   = pp.contrast !== 1.0  ? `contrast(${pp.contrast.toFixed(2)}) ` : '';
+  const invert     = pp.invert            ? 'invert(1) '                             : '';
+  // Threshold approximated with extreme contrast (visual hint only)
+  const thresh     = pp.threshold !== null ? 'contrast(99) ' : '';
+  const filterStr  = blur + brightness + contrast + invert + thresh || 'none';
+
+  photoImg.style.filter = filterStr;  // filter only the photo, not overlays
+
+  // If threshold is on, show a note that it needs Apply
+  if (pp.threshold !== null) {
+    setStatus('Threshold: click Apply threshold to see exact result');
+  } else {
+    setStatus('');
+  }
+}
+
+async function applyThreshold() {
+  // Server-side apply for threshold (CSS can't do it accurately)
+  if (!currentImage) return;
+  const photo = photos[currentIdx];
+  const pp = getPP();
+  setStatus('Applying...');
+  try {
+    const res = await fetch('/api/preview', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({stem: photo.stem, preprocess: pp})
+    });
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch { throw new Error(`Server (HTTP ${res.status}): ${raw.slice(0, 200)}`); }
+    if (data.error) { setStatus(data.error, true); return; }
+    const img = new Image();
+    img.onload = () => {
+      displayImage = img;
+      photoImg.src = img.src;         // swap to the preprocessed version
+      photoImg.style.filter = 'none'; // preprocessing is already baked in
+      redraw();
+      setStatus('Preprocessed — segmentation uses this image. Reset to undo.');
+    };
+    img.src = 'data:image/jpeg;base64,' + data.image;
+  } catch(e) { setStatus('Apply failed: ' + e.message, true); }
+}
+
+function resetPP() {
+  document.getElementById('pp-blur').value        = 0;
+  document.getElementById('pp-bright').value      = 0;
+  document.getElementById('pp-contrast').value    = 1;
+  document.getElementById('pp-thresh').value      = 128;
+  document.getElementById('pp-thresh-on').checked = false;
+  document.getElementById('pp-invert').checked    = false;
+  photoImg.style.filter = 'none';
+  if (displayImage) {
+    photoImg.onload = null;           // don't re-trigger the load setup
+    photoImg.src = currentOriginalSrc; // restore original photo
+  }
+  displayImage = null;
+  onPP();
+  if (currentImage) { redraw(); setStatus(''); }
+}
+
+// ── Duplicate (new tag from same photo) ───────────────────────────────────────
+async function duplicatePhoto(e, idx) {
+  e.stopPropagation();
+  e.preventDefault();
+  const stem = photos[idx].stem;
+  try {
+    const res  = await fetch('/api/duplicate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stem}),
+    });
+    const data = await res.json();
+    if (data.error) { setStatus('Duplicate failed: ' + data.error, true); return; }
+    // Add new photo to list immediately after current, then load it
+    const newPhoto = {name: data.new_name, stem: data.new_stem, done: false};
+    photos.splice(idx + 1, 0, newPhoto);
+    renderSidebar();
+    loadPhoto(idx + 1);
+    setStatus(`New tag created: ${data.new_stem}  — annotate and save.`);
+  } catch(e) { setStatus('Duplicate error: ' + e.message, true); }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deletePhoto(e, idx) {
+  e.stopPropagation();
+  e.preventDefault();
+  const photo = photos[idx];
+  if (!confirm(`Exclude "${photo.stem}"?\n\nMoves to data/excluded/ — not permanently deleted.`)) return;
+
+  // Remove from list immediately, then tell server
+  photos.splice(idx, 1);
+  if (currentIdx >= photos.length) currentIdx = Math.max(0, photos.length - 1);
+  renderSidebar();
+  updateProgress();
+  if (photos.length) loadPhoto(currentIdx);
+  else { ctx.clearRect(0,0,canvas.width,canvas.height); setStatus('No photos remaining'); }
+
+  // Fire-and-forget server call
+  try {
+    await fetch('/api/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({stem: photo.stem})
+    });
+  } catch(err) {
+    console.warn('Delete server call failed:', err);
+  }
+}
+
+// Init brush cursor size
+updateBrushSize();
+init();
+</script>
+</body>
+</html>
