@@ -54,12 +54,13 @@ CONFIDENCE_THRESHOLD = 76   # kept for display only; grep scoring starts at 80
 
 RAS_DIR = SEG_DIR = VLM_DIR = CSV_VLM = None
 
-def _init_paths(project_root: Path):
+def _init_paths(project_root: Path, run_id: int | None = None):
     global RAS_DIR, SEG_DIR, VLM_DIR, CSV_VLM
     RAS_DIR  = project_root / "data" / "rasters"
     SEG_DIR  = project_root / "data" / "segmented"
-    VLM_DIR  = project_root / "data" / "vlm"
-    CSV_VLM  = project_root / "data" / "vlm_scores.csv"
+    suffix   = f"_run{run_id}" if run_id is not None else ""
+    VLM_DIR  = project_root / "data" / f"vlm{suffix}"
+    CSV_VLM  = project_root / "data" / f"vlm_scores{suffix}.csv"
     VLM_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -163,51 +164,95 @@ Rules:
 """
 
 
-# Vague terms that trigger a clarification pass
-_VAGUE_TRIGGERS = [
-    # Only trigger when the model is genuinely non-specific about shapes
-    "abstract shape", "abstract form", "abstract design",
-    "various shape", "various form", "various element",
-    "decorative element", "decorative feature",
-    "additional element", "additional detail",
-    "other element",
-    # NOT included: "geometric shape", "complex shape", "intricate detail",
-    # "decorative motif" — these appear in perfectly good specific descriptions
-]
-
-def _needs_clarification(description: str) -> bool:
-    desc_lower = description.lower()
-    return any(t in desc_lower for t in _VAGUE_TRIGGERS)
-
-
-def _build_clarification_prompt(description: str) -> str:
-    """Pass 1b — force the model to be specific about anything vague."""
+def _build_figures_prompt(description: str) -> str:
+    """Pass 2a — focused on figurative content only.
+    Faces, characters, and body parts are consistently under-reported in a
+    generic pass, so we ask about them exclusively here.
+    """
     return f"""You described this graffiti image as: "{description}"
 
-Some of your description was vague. Now be completely specific.
-For every element you described vaguely, name the exact shape:
-- Instead of "abstract shapes" → say "an oval loop, a small spiral, and a zigzag"
-- Instead of "decorative elements" → say "two floating dots and a curved arch"
+Look ONLY for figurative content — any human, animal, or character elements.
+Be specific: name every face, head, eye, mouth, nose, skull, body, limb, hand,
+figure, character, portrait, smiley, or creature you can identify.
+Include schematic or abstract versions — a simple circle with two dots for eyes counts as a face.
+Include partial features — if you see just eyes, or just a mouth, name them.
+If there is nothing figurative at all, say "none".
+
+Do NOT copy the example — write your own from the description above.
 
 Respond with ONLY a JSON object:
 {{
-  "further_detail": "Specific description of every element, naming exact shapes."
+  "figures": "square jaw, two small dots"
 }}
 """
 
 
+def _build_geometry_prompt(description: str) -> str:
+    """Pass 2b — focused on geometric shapes only."""
+    return f"""You described this graffiti image as: "{description}"
+
+Look ONLY for geometric shapes — pure forms with no symbolic meaning.
+Name every: circle, oval, loop, arch, arc, zigzag, triangle, square, rectangle,
+crosshatch, grid, dot, line, curve, spiral, meander, branching, or ladder shape.
+Include small or decorative versions — a tiny floating dot counts.
+If there are no geometric shapes, say "none".
+
+Do NOT copy the example — write your own from the description above.
+
+Respond with ONLY a JSON object:
+{{
+  "geometry": "large arch, two dots, spiral"
+}}
+"""
+
+
+def _build_motifs_prompt(description: str) -> str:
+    """Pass 2c — focused on symbolic motifs and cultural glyphs only."""
+    return f"""You described this graffiti image as: "{description}"
+
+Look ONLY for symbolic motifs and cultural glyphs — shapes that carry meaning.
+Name every: heart, arrow, star, cross, peace sign, drip, teardrop, eye symbol,
+crown, sun, wheel, snake, feather, leaf, hand stencil, or any other recognisable symbol or emblem.
+If there are no symbols or motifs, say "none".
+
+Do NOT copy the example — write your own from the description above.
+
+Respond with ONLY a JSON object:
+{{
+  "motifs": "drip, arrow"
+}}
+"""
+
+
+def _extract_pass2_text(raw: str, key: str) -> str:
+    """Parse a focused pass response, returning a plain string."""
+    parsed = _parse_json(raw)
+    val = parsed.get(key, "")
+    if isinstance(val, list):
+        val = ", ".join(str(v) for v in val)
+    val = str(val).strip()
+    return "" if val.lower() in ("none", "n/a", "") else val
+
+
 # ── Symbol keyword grep ────────────────────────────────────────────────────────
 # For each symbol key, list of text triggers that indicate it's present.
-# Matched against the combined description + further_detail text.
+# Matched against Pass 2 symbol distillation text.
 
 SYMBOL_KEYWORDS: dict[str, list[str]] = {
     "accent_dot":    ["dot", "dots", "floating dot", "floating point", "accent", "isolated point",
-                      "small mark", "spot", "spots", "point above", "floating mark"],
-    "arch":          ["arch", "arc", "rainbow arc", "dome", "curved arch", "arched"],
-    "zigzag":        ["zigzag", "zig-zag", "lightning", "jagged", "serrated line"],
-    "circle":        ["circle", "circular", "round loop", "enclosed circle", "ring", "disc"],
+                      "small mark", "spot", "spots", "point above", "floating mark",
+                      "small dot", "tiny dot", "filled dot", "paint dot", "isolated dot",
+                      "small circle", "small round", "small filled"],
+    "arch":          ["arch", "arc", "rainbow arc", "dome", "curved arch", "arched",
+                      "curved line", "curved stroke", "sweeping curve", "arching curve"],
+    "zigzag":        ["zigzag", "zig-zag", "lightning", "jagged", "serrated line",
+                      "angular line", "sharp angles", "sharp turns", "jagged line"],
+    "circle":        ["circle", "circular", "round loop", "enclosed circle", "ring", "disc",
+                      "loop", "loops", "closed loop", "rounded loop", "circular loop",
+                      "circular shape", "circular outline", "circular form"],
     "oval":          ["oval", "ellipse", "elliptical", "egg shape", "elongated circle",
-                      "oblong", "oval loop", "oval shape"],
+                      "oblong", "oval loop", "oval shape", "irregular loop", "large loop",
+                      "elongated loop", "rounded shape"],
     "triangle":      ["triangle", "triangular", "three-sided", "pyramidal"],
     "square":        ["square", "rectangle", "rectangular", "box shape", "enclosed box"],
     "crosshatch":    ["crosshatch", "grid", "hatching", "cross-hatch", "lattice"],
@@ -219,7 +264,9 @@ SYMBOL_KEYWORDS: dict[str, list[str]] = {
                       "spiral loop", "swirling"],
     "meander":       ["meander", "greek key", "labyrinthine", "maze"],
     "branching":     ["branch", "branching", "fork", "forked", "tree-like"],
-    "cordiform":     ["heart", "heart shape", "heart-shaped", "cordiform"],
+    "cordiform":     ["heart", "heart shape", "heart-shaped", "cordiform",
+                      "love heart", "heart motif", "heart symbol", "heart outline",
+                      "heart form", "cardiac", "love symbol"],
     "arrow":         ["arrow", "arrow shape", "arrowhead with shaft", "pointing arrow"],
     "arrowhead":     ["arrowhead", "arrow tip", "pointed tip", "arrow point"],
     "wheel":         ["wheel", "sun symbol", "radial", "spokes", "concentric circle"],
@@ -228,9 +275,15 @@ SYMBOL_KEYWORDS: dict[str, list[str]] = {
     "eye":           ["eye", "single eye", "eye symbol", "pupil", "iris", "eye shape"],
     "peace":         ["peace", "peace sign", "peace symbol"],
     "drip":          ["drip", "paint drip", "drop", "teardrop", "dribble", "dripping"],
-    "face":          ["face", "facial", "head with", "portrait", "smiley", "mask",
+    "face":          ["face", "facial", "head", "portrait", "smiley", "mask",
                       "eyes and mouth", "nose and mouth", "face-like", "stylized face",
-                      "human face", "cartoon face", "schematic face"],
+                      "human face", "cartoon face", "schematic face",
+                      "humanoid", "figure with", "cartoon character", "character with",
+                      "skull", "face shape", "face outline", "face motif",
+                      "eyes nose", "eyes mouth", "two eyes", "eye and mouth",
+                      "human figure", "person", "caricature", "grimace",
+                      "head shape", "head outline", "head motif",
+                      "anthropomorphic", "face-shaped"],
     "hand_negative": ["negative hand", "hand stencil", "hand outline"],
     "hand_positive": ["handprint", "hand print", "positive hand", "palm print"],
     "partial_hand":  ["partial hand", "missing finger", "incomplete hand"],
@@ -265,14 +318,14 @@ def _is_hedged(text: str, match_start: int, window: int = 45) -> bool:
     return any(h in context for h in _HEDGE_WORDS)
 
 
-def _grep_symbols(description: str, further_detail: str = "") -> list[dict]:
-    """Match combined text against SYMBOL_KEYWORDS, with hedge-word filtering.
+def _grep_symbols(symbols_text: str) -> list[dict]:
+    """Match Pass 2 symbol distillation text against SYMBOL_KEYWORDS.
 
     A keyword match is accepted only if it is NOT surrounded by hedging language
     (e.g. "resembles a circle", "partial circle" are rejected).
     Confidence is boosted by the number of unambiguous trigger matches.
     """
-    combined = (description + " " + further_detail).lower()
+    combined = symbols_text.lower()
     detections = []
     for key, triggers in SYMBOL_KEYWORDS.items():
         matched = []
@@ -645,7 +698,7 @@ def render_report(stem: str, img_path: Path, result: dict) -> None:
     further = result.get("further_detail", "")
     if further:
         gap(4)
-        txt("CLARIFICATION:", colour=(200, 160, 80))
+        txt("SYMBOLS IDENTIFIED:", colour=(200, 160, 80))
         for line in _word_wrap(further, 46):
             txt(line, colour=(210, 185, 140))
     gap()
@@ -743,22 +796,32 @@ def process_mark(stem: str, model: str, detection_prompt: str) -> dict | None:
         desc_raw    = parsed.get("description", "")
         description = desc_raw if isinstance(desc_raw, str) else json.dumps(desc_raw)
 
-        # ── Pass 1b: clarification if vague terms detected ────────────────────
-        further_detail = ""
-        if _needs_clarification(description):
-            print(f"    → vague description, requesting clarification")
-            clar_prompt = _build_clarification_prompt(description)
-            raw1b = _call_ollama(img_b64, clar_prompt, model)
-            clar  = _parse_json(raw1b)
-            fd = clar.get("further_detail", "")
-            # Model sometimes returns a nested dict instead of a plain string
-            further_detail = fd if isinstance(fd, str) else json.dumps(fd)
+        # ── Pass 2a: figures (faces, eyes, characters) ───────────────────────
+        print(f"  {stem}  — pass 2a (figures)…")
+        fig_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_figures_prompt(description), model), "figures")
+        print(f"    → figures:  {fig_text[:80] or '(none)'}")
 
-        # ── Grep: match description + further_detail against keyword dict ─────
-        detections = _grep_symbols(description, further_detail)
+        # ── Pass 2b: geometry (circles, arches, zigzags…) ────────────────────
+        print(f"  {stem}  — pass 2b (geometry)…")
+        geo_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_geometry_prompt(description), model), "geometry")
+        print(f"    → geometry: {geo_text[:80] or '(none)'}")
+
+        # ── Pass 2c: motifs (hearts, arrows, drips, stars…) ──────────────────
+        print(f"  {stem}  — pass 2c (motifs)…")
+        mot_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_motifs_prompt(description), model), "motifs")
+        print(f"    → motifs:   {mot_text[:80] or '(none)'}")
+
+        # Combine all three into one string for grep + display
+        symbols_text = ", ".join(t for t in [fig_text, geo_text, mot_text] if t)
+
+        # ── Grep: match all three pass outputs against keyword dict ──────────
+        detections = _grep_symbols(symbols_text)
         print(f"    → grep matched: {[d['key'] for d in detections] or 'none'}")
 
-        result = _build_result(parsed, further_detail, detections)
+        result = _build_result(parsed, symbols_text, detections)
 
         # ── Pass 2: native Qwen grounding for each matched symbol ─────────────
         if result["detections"]:
@@ -860,13 +923,16 @@ def main():
                         help=f"Ollama model name (default: {VLM_MODEL})")
     parser.add_argument("--skip-existing", action="store_true",
                         help="Skip stems that already have a report image")
+    parser.add_argument("--run-id", type=int, default=None,
+                        help="Replicate run number — saves to vlm_run{N}/ and vlm_scores_run{N}.csv")
     args = parser.parse_args()
 
     project_root = args.project.expanduser().resolve() if args.project \
                    else Path(__file__).parent.parent
-    _init_paths(project_root)
+    _init_paths(project_root, run_id=args.run_id)
 
-    print(f"\nProject : {project_root}")
+    run_label = f" (run {args.run_id})" if args.run_id is not None else ""
+    print(f"\nProject : {project_root}{run_label}")
     print(f"Model   : {args.model}")
     print(f"Ollama  : {OLLAMA_URL}")
 
