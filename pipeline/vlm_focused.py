@@ -1,36 +1,42 @@
 """
-vlm.py — Symbol detection via ONE OPEN-ENDED PASS (neutral architecture).
+vlm_focused.py — Symbol detection via THREE SPECIALISED PASSES (focused architecture).
 
-PROMPT PHILOSOPHY — NEUTRAL / OPEN-ENDED
-=========================================
-This version uses a single distillation pass after the free description,
-with deliberately neutral framing to minimise confirmation bias:
+PROMPT PHILOSOPHY — FOCUSED / CATEGORICAL
+==========================================
+This version uses a three-pass distillation strategy after the free description:
 
   Pass 1  : Unconstrained free description — model writes everything it sees
-             in its own words with no category framing.
+             in its own words with no category framing. Same as vlm_neutral.py.
 
-  Pass 2  : Single open-ended pass — model asked to list every distinct element
-             using neutral mixed vocabulary (shapes, figures, characters, motifs,
-             marks, symbols, letters). No category is primed; the model uses
-             whatever language it naturally reaches for. Grep canonicalises to
-             our symbol keys.
+  Pass 2a : FIGURES pass — model asked to list ONLY faces, characters, eyes,
+             mouths, hands, skulls, bodies. Dedicated attention increases recall
+             for figurative content that gets diluted in a generic pass.
 
-  Grep    : Runs on the single Pass 2 output only.
+  Pass 2b : GEOMETRY pass — model asked to list ONLY geometric primitives:
+             circles, ovals, arches, zigzags, triangles, spirals, grids, dots.
 
-BIAS PROFILE
-============
-Less likely to report things that aren't there. Trade-off: figurative content
-(faces, characters) may be under-reported when diluted by geometric language.
-This is the version run in the 5-replicate stability study.
+  Pass 2c : MOTIFS pass — model asked to list ONLY symbolic/cultural glyphs:
+             hearts, arrows, stars, crosses, drips, peace signs, wheels.
+
+  Grep    : Runs on the combined output of all three passes, canonicalising
+             to our symbol key vocabulary.
+
+BIAS RISK
+=========
+Focused passes increase recall (fewer missed faces, hearts etc.) but carry
+a real risk of confirmation bias — asking "are there faces?" primes the model
+to find something face-like even in abstract curves. Use alongside
+vlm_neutral.py and compare; disagreements warrant human review.
+Prefer vlm_neutral.py when precision matters more than recall.
 
 Outputs:
-  data/vlm_scores.csv  — one row per mark
-  data/vlm/            — annotated report card images
+  data/vlm_scores_focused.csv  — one row per mark
+  data/vlm_focused/            — annotated report card images
 
 Usage:
     conda activate othercodes
-    python3 pipeline/vlm.py --project /path/to/project
-    python3 pipeline/vlm.py --project ~/proj --stems IMG_0001 IMG_0002
+    python3 pipeline/vlm_focused.py --project /path/to/project
+    python3 pipeline/vlm_focused.py --project ~/proj --stems IMG_0001 IMG_0002
 """
 
 import argparse
@@ -64,8 +70,8 @@ def _init_paths(project_root: Path, run_id: int | None = None):
     RAS_DIR  = project_root / "data" / "rasters"
     SEG_DIR  = project_root / "data" / "segmented"
     suffix   = f"_run{run_id}" if run_id is not None else ""
-    VLM_DIR  = project_root / "data" / f"vlm{suffix}"
-    CSV_VLM  = project_root / "data" / f"vlm_scores{suffix}.csv"
+    VLM_DIR  = project_root / "data" / f"vlm_focused{suffix}"
+    CSV_VLM  = project_root / "data" / f"vlm_scores_focused{suffix}.csv"
     VLM_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -169,29 +175,74 @@ Rules:
 """
 
 
-def _build_symbols_prompt(description: str) -> str:
-    """Pass 2 — single neutral distillation.
-
-    Neutral framing: no category is primed. Mixed vocabulary (shapes, figures,
-    characters, motifs, marks, symbols, letters) means the model is equally
-    likely to report a face as a circle. Lower confirmation bias than focused
-    passes; may under-report figurative content.
-    Example is deliberately unrelated so temperature=0 doesn't copy it.
+def _build_figures_prompt(description: str) -> str:
+    """Pass 2a — focused on figurative content only.
+    Faces, characters, and body parts are consistently under-reported in a
+    generic pass, so we ask about them exclusively here.
     """
     return f"""You described this graffiti image as: "{description}"
 
-Now list every distinct element you can identify — shapes, figures, characters,
-motifs, marks, symbols, letters, or anything else present.
-Be specific and complete. Name what you actually see, not what you expect.
-Pay attention to small floating marks, dots, or isolated elements near the tag.
+Look ONLY for figurative content — any human, animal, or character elements.
+Be specific: name every face, head, eye, mouth, nose, skull, body, limb, hand,
+figure, character, portrait, smiley, or creature you can identify.
+Include schematic or abstract versions — a simple circle with two dots for eyes counts as a face.
+Include partial features — if you see just eyes, or just a mouth, name them.
+If there is nothing figurative at all, say "none".
 
-Do NOT copy the example — write your own based on the description above.
+Do NOT copy the example — write your own from the description above.
 
 Respond with ONLY a JSON object:
 {{
-  "symbols": "arch, two dots, zigzag"
+  "figures": "square jaw, two small dots"
 }}
 """
+
+
+def _build_geometry_prompt(description: str) -> str:
+    """Pass 2b — focused on geometric shapes only."""
+    return f"""You described this graffiti image as: "{description}"
+
+Look ONLY for geometric shapes — pure forms with no symbolic meaning.
+Name every: circle, oval, loop, arch, arc, zigzag, triangle, square, rectangle,
+crosshatch, grid, dot, line, curve, spiral, meander, branching, or ladder shape.
+Include small or decorative versions — a tiny floating dot counts.
+If there are no geometric shapes, say "none".
+
+Do NOT copy the example — write your own from the description above.
+
+Respond with ONLY a JSON object:
+{{
+  "geometry": "large arch, two dots, spiral"
+}}
+"""
+
+
+def _build_motifs_prompt(description: str) -> str:
+    """Pass 2c — focused on symbolic motifs and cultural glyphs only."""
+    return f"""You described this graffiti image as: "{description}"
+
+Look ONLY for symbolic motifs and cultural glyphs — shapes that carry meaning.
+Name every: heart, arrow, star, cross, peace sign, drip, teardrop, eye symbol,
+crown, sun, wheel, snake, feather, leaf, hand stencil, or any other recognisable symbol or emblem.
+If there are no symbols or motifs, say "none".
+
+Do NOT copy the example — write your own from the description above.
+
+Respond with ONLY a JSON object:
+{{
+  "motifs": "drip, arrow"
+}}
+"""
+
+
+def _extract_pass2_text(raw: str, key: str) -> str:
+    """Parse a focused pass response, returning a plain string."""
+    parsed = _parse_json(raw)
+    val = parsed.get(key, "")
+    if isinstance(val, list):
+        val = ", ".join(str(v) for v in val)
+    val = str(val).strip()
+    return "" if val.lower() in ("none", "n/a", "") else val
 
 
 # ── Symbol keyword grep ────────────────────────────────────────────────────────
@@ -756,18 +807,28 @@ def process_mark(stem: str, model: str, detection_prompt: str) -> dict | None:
         desc_raw    = parsed.get("description", "")
         description = desc_raw if isinstance(desc_raw, str) else json.dumps(desc_raw)
 
-        # ── Pass 2: single neutral distillation — always runs ────────────────
-        print(f"  {stem}  — pass 2 (neutral)…")
-        sym_prompt = _build_symbols_prompt(description)
-        raw2       = _call_ollama(img_b64, sym_prompt, model)
-        sym_parsed = _parse_json(raw2)
-        sym_raw    = sym_parsed.get("symbols", "")
-        if isinstance(sym_raw, list):
-            sym_raw = ", ".join(str(s) for s in sym_raw)
-        symbols_text = sym_raw if isinstance(sym_raw, str) else str(sym_raw)
-        print(f"    → elements: {symbols_text[:100]}{'…' if len(symbols_text) > 100 else ''}")
+        # ── Pass 2a: figures (faces, eyes, characters) ───────────────────────
+        print(f"  {stem}  — pass 2a (figures)…")
+        fig_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_figures_prompt(description), model), "figures")
+        print(f"    → figures:  {fig_text[:80] or '(none)'}")
 
-        # ── Grep: match Pass 2 output against keyword dict ───────────────────
+        # ── Pass 2b: geometry (circles, arches, zigzags…) ────────────────────
+        print(f"  {stem}  — pass 2b (geometry)…")
+        geo_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_geometry_prompt(description), model), "geometry")
+        print(f"    → geometry: {geo_text[:80] or '(none)'}")
+
+        # ── Pass 2c: motifs (hearts, arrows, drips, stars…) ──────────────────
+        print(f"  {stem}  — pass 2c (motifs)…")
+        mot_text = _extract_pass2_text(
+            _call_ollama(img_b64, _build_motifs_prompt(description), model), "motifs")
+        print(f"    → motifs:   {mot_text[:80] or '(none)'}")
+
+        # Combine all three into one string for grep + display
+        symbols_text = ", ".join(t for t in [fig_text, geo_text, mot_text] if t)
+
+        # ── Grep: match all three pass outputs against keyword dict ──────────
         detections = _grep_symbols(symbols_text)
         print(f"    → grep matched: {[d['key'] for d in detections] or 'none'}")
 

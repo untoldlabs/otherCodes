@@ -1,5 +1,5 @@
 """
-vlm.py — Symbol detection via ONE OPEN-ENDED PASS (neutral architecture).
+vlm_neutral.py — Symbol detection via ONE OPEN-ENDED PASS (neutral architecture).
 
 PROMPT PHILOSOPHY — NEUTRAL / OPEN-ENDED
 =========================================
@@ -7,30 +7,36 @@ This version uses a single distillation pass after the free description,
 with deliberately neutral framing to minimise confirmation bias:
 
   Pass 1  : Unconstrained free description — model writes everything it sees
-             in its own words with no category framing.
+             in its own words with no category framing. Same as vlm_focused.py.
 
-  Pass 2  : Single open-ended pass — model asked to list every distinct element
-             using neutral mixed vocabulary (shapes, figures, characters, motifs,
-             marks, symbols, letters). No category is primed; the model uses
-             whatever language it naturally reaches for. Grep canonicalises to
-             our symbol keys.
+  Pass 2  : Single NEUTRAL pass — model asked to "list every distinct element
+             you can identify" using deliberately mixed vocabulary (shapes,
+             figures, characters, motifs, marks, symbols, letters) so no
+             single category is primed. The model reaches for whatever language
+             it naturally uses; grep canonicalises to our symbol keys.
 
   Grep    : Runs on the single Pass 2 output only.
 
 BIAS PROFILE
 ============
-Less likely to report things that aren't there. Trade-off: figurative content
-(faces, characters) may be under-reported when diluted by geometric language.
-This is the version run in the 5-replicate stability study.
+This version is less likely to report things that aren't there — the neutral
+framing means the model won't try harder to find faces or hearts just because
+it was asked to look for them. Trade-off: figurative content (faces, characters)
+tends to get diluted by geometric language and may be under-reported.
+
+Compare results with vlm_focused.py. Symbols found by BOTH versions are the
+most reliable detections. Symbols found only by vlm_focused.py warrant
+human review (possible confirmation bias). Symbols found only by vlm_neutral.py
+are likely real but described in unusual vocabulary.
 
 Outputs:
-  data/vlm_scores.csv  — one row per mark
-  data/vlm/            — annotated report card images
+  data/vlm_scores_neutral.csv  — one row per mark
+  data/vlm_neutral/            — annotated report card images
 
 Usage:
     conda activate othercodes
-    python3 pipeline/vlm.py --project /path/to/project
-    python3 pipeline/vlm.py --project ~/proj --stems IMG_0001 IMG_0002
+    python3 pipeline/vlm_neutral.py --project /path/to/project
+    python3 pipeline/vlm_neutral.py --project ~/proj --stems IMG_0001 IMG_0002
 """
 
 import argparse
@@ -64,8 +70,8 @@ def _init_paths(project_root: Path, run_id: int | None = None):
     RAS_DIR  = project_root / "data" / "rasters"
     SEG_DIR  = project_root / "data" / "segmented"
     suffix   = f"_run{run_id}" if run_id is not None else ""
-    VLM_DIR  = project_root / "data" / f"vlm{suffix}"
-    CSV_VLM  = project_root / "data" / f"vlm_scores{suffix}.csv"
+    VLM_DIR  = project_root / "data" / f"vlm_neutral{suffix}"
+    CSV_VLM  = project_root / "data" / f"vlm_scores_neutral{suffix}.csv"
     VLM_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -175,7 +181,7 @@ def _build_symbols_prompt(description: str) -> str:
     Neutral framing: no category is primed. Mixed vocabulary (shapes, figures,
     characters, motifs, marks, symbols, letters) means the model is equally
     likely to report a face as a circle. Lower confirmation bias than focused
-    passes; may under-report figurative content.
+    passes; may under-report figurative content. Compare with vlm_focused.py.
     Example is deliberately unrelated so temperature=0 doesn't copy it.
     """
     return f"""You described this graffiti image as: "{description}"
